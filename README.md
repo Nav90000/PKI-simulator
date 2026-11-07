@@ -58,16 +58,6 @@ npm install
 
 ---
 
-## 💻 Development
-
-```bash
-npm run dev
-```
-
-Opens the application at **http://localhost:5173**
-
----
-
 ## 🏗️ Production Build
 
 ```bash
