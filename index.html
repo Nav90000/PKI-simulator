@@ -1,0 +1,2951 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>PKI Simulator — Interactive Public Key Infrastructure</title>
+<script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<style>
+  :root {
+    --bg-primary: #040d1a;
+    --bg-secondary: #071628;
+    --bg-card: rgba(10, 30, 60, 0.7);
+    --bg-glass: rgba(6, 20, 45, 0.6);
+    --border: rgba(0, 180, 255, 0.15);
+    --border-bright: rgba(0, 200, 255, 0.4);
+    --accent: #00b4ff;
+    --accent2: #0066ff;
+    --accent3: #00ffb3;
+    --success: #00e676;
+    --error: #ff3d71;
+    --warn: #ffaa00;
+    --text-primary: #e8f4ff;
+    --text-secondary: #7eb8d4;
+    --text-dim: #3a6a8a;
+    --sidebar-w: 260px;
+    --topbar-h: 60px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; background: var(--bg-primary); color: var(--text-primary); font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; overflow-x: hidden; }
+  #root { height: 100%; }
+
+  /* Scrollbar */
+  ::-webkit-scrollbar { width: 6px; }
+  ::-webkit-scrollbar-track { background: var(--bg-primary); }
+  ::-webkit-scrollbar-thumb { background: rgba(0,180,255,0.3); border-radius: 3px; }
+
+  /* Animations */
+  @keyframes fadeIn { from { opacity:0; transform:translateY(16px); } to { opacity:1; transform:translateY(0); } }
+  @keyframes fadeInLeft { from { opacity:0; transform:translateX(-20px); } to { opacity:1; transform:translateX(0); } }
+  @keyframes pulse { 0%,100% { opacity:1; } 50% { opacity:0.4; } }
+  @keyframes spin { from { transform:rotate(0deg); } to { transform:rotate(360deg); } }
+  @keyframes glow { 0%,100% { box-shadow:0 0 8px rgba(0,180,255,0.3); } 50% { box-shadow:0 0 24px rgba(0,180,255,0.7),0 0 48px rgba(0,100,255,0.3); } }
+  @keyframes shimmer { 0% { background-position:-200% 0; } 100% { background-position:200% 0; } }
+  @keyframes float { 0%,100% { transform:translateY(0); } 50% { transform:translateY(-10px); } }
+  @keyframes slideDown { from { opacity:0; transform:translateY(-10px); } to { opacity:1; transform:translateY(0); } }
+  @keyframes slideRight { from { opacity:0; transform:translateX(-30px); } to { opacity:1; transform:translateX(0); } }
+  @keyframes packetMove { 0% { left:0; opacity:1; } 100% { left:calc(100% - 24px); opacity:0.7; } }
+  @keyframes packetMoveBack { 0% { left:calc(100% - 24px); opacity:1; } 100% { left:0; opacity:0.7; } }
+  @keyframes gridPulse { 0%,100% { opacity:0.03; } 50% { opacity:0.07; } }
+  @keyframes countUp { from { opacity:0; } to { opacity:1; } }
+  @keyframes checkmark { 0% { stroke-dashoffset:100; } 100% { stroke-dashoffset:0; } }
+  @keyframes borderGlow { 0%,100% { border-color:rgba(0,180,255,0.2); } 50% { border-color:rgba(0,180,255,0.6); } }
+  @keyframes progressBar { from { width:0; } to { width:var(--target-width,100%); } }
+
+  .fade-in { animation: fadeIn 0.5s ease forwards; }
+  .fade-in-left { animation: fadeInLeft 0.4s ease forwards; }
+  .slide-down { animation: slideDown 0.3s ease forwards; }
+  .float-anim { animation: float 3s ease-in-out infinite; }
+
+  /* Grid background */
+  .grid-bg {
+    position: fixed; inset: 0; pointer-events: none; z-index: 0;
+    background-image:
+      linear-gradient(rgba(0,180,255,0.04) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(0,180,255,0.04) 1px, transparent 1px);
+    background-size: 40px 40px;
+    animation: gridPulse 4s ease-in-out infinite;
+  }
+
+  /* Layout */
+  .app-layout { display:flex; height:100vh; position:relative; overflow:hidden; }
+  
+  /* Sidebar */
+  .sidebar {
+    width: var(--sidebar-w); min-width: var(--sidebar-w);
+    background: linear-gradient(180deg, rgba(4,15,35,0.98) 0%, rgba(4,12,28,0.98) 100%);
+    border-right: 1px solid var(--border);
+    display: flex; flex-direction: column;
+    transition: all 0.3s ease;
+    z-index: 100; position: relative;
+    backdrop-filter: blur(20px);
+  }
+  .sidebar.collapsed { width: 60px; min-width: 60px; }
+  .sidebar-header {
+    padding: 16px; border-bottom: 1px solid var(--border);
+    display:flex; align-items:center; gap:10px;
+  }
+  .sidebar-logo {
+    width:36px; height:36px; background:linear-gradient(135deg,#0066ff,#00b4ff);
+    border-radius:8px; display:flex; align-items:center; justify-content:center;
+    font-size:16px; flex-shrink:0;
+  }
+  .sidebar-title { font-size:13px; font-weight:700; color:var(--accent); letter-spacing:1.5px; white-space:nowrap; overflow:hidden; }
+  .sidebar-subtitle { font-size:10px; color:var(--text-dim); letter-spacing:0.5px; }
+  .sidebar-nav { flex:1; overflow-y:auto; padding:8px 0; }
+  .nav-section-label {
+    font-size:10px; font-weight:600; color:var(--text-dim); letter-spacing:2px;
+    padding:12px 16px 4px; text-transform:uppercase;
+  }
+  .nav-item {
+    display:flex; align-items:center; gap:10px; padding:10px 16px;
+    cursor:pointer; transition:all 0.2s; border-left:3px solid transparent;
+    position:relative; user-select:none;
+  }
+  .nav-item:hover { background:rgba(0,180,255,0.06); border-left-color:rgba(0,180,255,0.3); }
+  .nav-item.active { background:rgba(0,180,255,0.1); border-left-color:var(--accent); }
+  .nav-item.completed .nav-status { color:var(--success); }
+  .nav-item.current .nav-status { color:var(--accent); }
+  .nav-item.locked { opacity:0.4; cursor:not-allowed; }
+  .nav-icon { font-size:16px; flex-shrink:0; width:20px; text-align:center; }
+  .nav-label { font-size:13px; color:var(--text-secondary); white-space:nowrap; overflow:hidden; flex:1; }
+  .nav-item.active .nav-label { color:var(--text-primary); }
+  .nav-status { font-size:10px; }
+  .sidebar-progress { padding:16px; border-top:1px solid var(--border); }
+  .progress-label { font-size:11px; color:var(--text-dim); margin-bottom:6px; display:flex; justify-content:space-between; }
+  .progress-bar-outer { height:4px; background:rgba(255,255,255,0.06); border-radius:2px; overflow:hidden; }
+  .progress-bar-inner { height:100%; background:linear-gradient(90deg,var(--accent2),var(--accent)); border-radius:2px; transition:width 0.5s ease; }
+
+  /* Topbar */
+  .topbar {
+    height: var(--topbar-h); background:rgba(4,13,26,0.9); backdrop-filter:blur(20px);
+    border-bottom:1px solid var(--border); display:flex; align-items:center;
+    padding:0 20px; gap:16px; flex-shrink:0; z-index:50;
+  }
+  .topbar-stage { font-size:12px; color:var(--text-dim); }
+  .topbar-stage span { color:var(--accent); font-weight:600; }
+  .topbar-divider { width:1px; height:20px; background:var(--border); }
+  .status-pill {
+    display:flex; align-items:center; gap:6px; padding:4px 10px;
+    border:1px solid var(--border); border-radius:20px; font-size:11px;
+  }
+  .status-dot { width:6px; height:6px; border-radius:50%; }
+  .status-dot.online { background:var(--success); box-shadow:0 0 6px var(--success); animation:pulse 2s infinite; }
+  .status-dot.verified { background:var(--accent); box-shadow:0 0 6px var(--accent); animation:pulse 2s infinite; }
+  .topbar-spacer { flex:1; }
+  .topbar-btn {
+    padding:6px 12px; border:1px solid var(--border); border-radius:6px;
+    background:transparent; color:var(--text-secondary); font-size:12px;
+    cursor:pointer; transition:all 0.2s;
+  }
+  .topbar-btn:hover { border-color:var(--accent); color:var(--accent); }
+
+  /* Main content */
+  .main-area { flex:1; display:flex; flex-direction:column; overflow:hidden; }
+  .page-content { flex:1; overflow-y:auto; padding:24px; position:relative; z-index:1; }
+
+  /* Cards */
+  .card {
+    background:var(--bg-card); border:1px solid var(--border);
+    border-radius:12px; padding:20px; backdrop-filter:blur(10px);
+    transition:all 0.2s;
+  }
+  .card:hover { border-color:rgba(0,180,255,0.25); }
+  .card-glow { animation:glow 3s ease-in-out infinite; }
+  .glass-card {
+    background:rgba(6,20,50,0.5); border:1px solid rgba(0,180,255,0.12);
+    border-radius:12px; backdrop-filter:blur(16px); padding:20px;
+  }
+
+  /* Buttons */
+  .btn-primary {
+    background:linear-gradient(135deg,#0052cc,#0099ff); color:#fff;
+    border:none; padding:12px 28px; border-radius:8px; font-size:14px;
+    font-weight:600; cursor:pointer; transition:all 0.2s; letter-spacing:0.3px;
+    position:relative; overflow:hidden;
+  }
+  .btn-primary:hover { transform:translateY(-1px); box-shadow:0 8px 24px rgba(0,100,255,0.4); }
+  .btn-primary:active { transform:translateY(0); }
+  .btn-primary:disabled { opacity:0.5; cursor:not-allowed; transform:none; }
+  .btn-secondary {
+    background:transparent; color:var(--accent); border:1px solid var(--border-bright);
+    padding:10px 24px; border-radius:8px; font-size:13px; font-weight:600;
+    cursor:pointer; transition:all 0.2s; letter-spacing:0.3px;
+  }
+  .btn-secondary:hover { background:rgba(0,180,255,0.08); border-color:var(--accent); }
+  .btn-danger {
+    background:rgba(255,61,113,0.15); color:var(--error); border:1px solid rgba(255,61,113,0.3);
+    padding:10px 24px; border-radius:8px; font-size:13px; font-weight:600;
+    cursor:pointer; transition:all 0.2s;
+  }
+  .btn-danger:hover { background:rgba(255,61,113,0.25); border-color:var(--error); }
+  .btn-success {
+    background:rgba(0,230,118,0.15); color:var(--success); border:1px solid rgba(0,230,118,0.3);
+    padding:10px 24px; border-radius:8px; font-size:13px; font-weight:600;
+    cursor:pointer; transition:all 0.2s;
+  }
+  .btn-success:hover { background:rgba(0,230,118,0.25); border-color:var(--success); }
+  .btn-sm { padding:6px 14px; font-size:12px; }
+  .btn-icon {
+    width:32px; height:32px; border:1px solid var(--border); border-radius:6px;
+    background:transparent; color:var(--text-secondary); cursor:pointer;
+    display:flex; align-items:center; justify-content:center; font-size:14px;
+    transition:all 0.2s;
+  }
+  .btn-icon:hover { border-color:var(--accent); color:var(--accent); }
+
+  /* Form */
+  .form-group { margin-bottom:16px; }
+  .form-label { font-size:12px; color:var(--text-dim); margin-bottom:6px; display:block; letter-spacing:0.5px; }
+  .form-input {
+    width:100%; background:rgba(4,15,35,0.8); border:1px solid var(--border);
+    border-radius:8px; padding:10px 14px; color:var(--text-primary); font-size:13px;
+    outline:none; transition:all 0.2s;
+  }
+  .form-input:focus { border-color:var(--accent); box-shadow:0 0 0 2px rgba(0,180,255,0.1); }
+  .form-select {
+    width:100%; background:rgba(4,15,35,0.8); border:1px solid var(--border);
+    border-radius:8px; padding:10px 14px; color:var(--text-primary); font-size:13px;
+    outline:none; cursor:pointer;
+  }
+
+  /* Page headers */
+  .page-header { margin-bottom:28px; }
+  .page-eyebrow { font-size:11px; font-weight:600; color:var(--accent); letter-spacing:2px; text-transform:uppercase; margin-bottom:6px; }
+  .page-title { font-size:28px; font-weight:700; color:var(--text-primary); line-height:1.2; }
+  .page-subtitle { font-size:14px; color:var(--text-secondary); margin-top:8px; line-height:1.6; }
+
+  /* Tags / Badges */
+  .badge {
+    display:inline-flex; align-items:center; gap:4px; padding:3px 10px;
+    border-radius:20px; font-size:11px; font-weight:600; letter-spacing:0.5px;
+  }
+  .badge-success { background:rgba(0,230,118,0.12); color:var(--success); border:1px solid rgba(0,230,118,0.3); }
+  .badge-error { background:rgba(255,61,113,0.12); color:var(--error); border:1px solid rgba(255,61,113,0.3); }
+  .badge-warn { background:rgba(255,170,0,0.12); color:var(--warn); border:1px solid rgba(255,170,0,0.3); }
+  .badge-info { background:rgba(0,180,255,0.12); color:var(--accent); border:1px solid rgba(0,180,255,0.3); }
+
+  /* Code block */
+  .code-block {
+    background:rgba(2,8,20,0.9); border:1px solid rgba(0,180,255,0.1);
+    border-radius:8px; padding:16px; font-family:'Courier New',monospace;
+    font-size:11px; color:#7eb8d4; line-height:1.7; white-space:pre-wrap;
+    word-break:break-all; position:relative; overflow:hidden;
+  }
+  .code-block::before {
+    content:''; position:absolute; top:0; left:0; right:0; height:1px;
+    background:linear-gradient(90deg,transparent,rgba(0,180,255,0.5),transparent);
+  }
+
+  /* Info panel */
+  .info-panel {
+    background:rgba(0,100,255,0.06); border:1px solid rgba(0,180,255,0.15);
+    border-left:3px solid var(--accent); border-radius:8px; padding:14px 16px;
+    font-size:13px; color:var(--text-secondary); line-height:1.6;
+  }
+
+  /* Step item */
+  .step-item {
+    display:flex; align-items:flex-start; gap:12px; padding:12px 0;
+    border-bottom:1px solid rgba(255,255,255,0.04);
+  }
+  .step-icon {
+    width:32px; height:32px; border-radius:50%; display:flex; align-items:center;
+    justify-content:center; font-size:14px; flex-shrink:0;
+  }
+  .step-icon.success { background:rgba(0,230,118,0.15); color:var(--success); border:1px solid rgba(0,230,118,0.3); }
+  .step-icon.error { background:rgba(255,61,113,0.15); color:var(--error); border:1px solid rgba(255,61,113,0.3); }
+  .step-icon.pending { background:rgba(0,180,255,0.1); color:var(--accent); border:1px solid rgba(0,180,255,0.2); animation:pulse 1.5s infinite; }
+  .step-icon.idle { background:rgba(255,255,255,0.04); color:var(--text-dim); border:1px solid var(--border); }
+
+  /* Table */
+  .data-table { width:100%; border-collapse:collapse; }
+  .data-table th { font-size:11px; font-weight:600; color:var(--text-dim); letter-spacing:1px; padding:10px 14px; text-align:left; border-bottom:1px solid var(--border); text-transform:uppercase; }
+  .data-table td { font-size:13px; color:var(--text-secondary); padding:12px 14px; border-bottom:1px solid rgba(255,255,255,0.03); }
+  .data-table tr:hover td { background:rgba(0,180,255,0.03); }
+
+  /* Modal */
+  .modal-overlay {
+    position:fixed; inset:0; background:rgba(2,6,18,0.85); z-index:1000;
+    display:flex; align-items:center; justify-content:center; padding:24px;
+    backdrop-filter:blur(4px); animation:fadeIn 0.2s ease;
+  }
+  .modal-box {
+    background:var(--bg-secondary); border:1px solid var(--border-bright);
+    border-radius:16px; padding:28px; max-width:500px; width:100%;
+    animation:slideDown 0.3s ease;
+  }
+  .modal-title { font-size:18px; font-weight:700; margin-bottom:12px; }
+  .modal-body { font-size:13px; color:var(--text-secondary); line-height:1.6; margin-bottom:20px; }
+  .modal-actions { display:flex; gap:10px; justify-content:flex-end; }
+
+  /* Tooltip / explanation */
+  .explain-btn {
+    display:inline-flex; align-items:center; gap:4px; font-size:11px;
+    color:var(--accent); cursor:pointer; border:1px solid rgba(0,180,255,0.2);
+    padding:3px 8px; border-radius:4px; background:rgba(0,180,255,0.04);
+    transition:all 0.2s; user-select:none;
+  }
+  .explain-btn:hover { background:rgba(0,180,255,0.1); }
+  .explain-panel {
+    background:rgba(0,30,70,0.8); border:1px solid rgba(0,180,255,0.2);
+    border-radius:8px; padding:14px; margin-top:8px; font-size:13px;
+    color:var(--text-secondary); line-height:1.6; animation:slideDown 0.2s ease;
+  }
+
+  /* Grid layouts */
+  .grid-2 { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
+  .grid-3 { display:grid; grid-template-columns:1fr 1fr 1fr; gap:16px; }
+  .grid-4 { display:grid; grid-template-columns:repeat(4,1fr); gap:16px; }
+
+  /* Flow diagram */
+  .flow-item {
+    display:flex; flex-direction:column; align-items:center; gap:4px;
+    padding:10px; position:relative;
+  }
+  .flow-node {
+    background:var(--bg-card); border:1px solid var(--border-bright);
+    border-radius:8px; padding:10px 16px; font-size:12px; font-weight:600;
+    color:var(--accent); white-space:nowrap; text-align:center;
+    min-width:120px;
+  }
+  .flow-arrow { color:var(--text-dim); font-size:20px; line-height:1; }
+
+  /* Loading screen */
+  .loading-screen {
+    position:fixed; inset:0; background:var(--bg-primary); z-index:9999;
+    display:flex; flex-direction:column; align-items:center; justify-content:center;
+    gap:20px;
+  }
+  .loading-logo {
+    width:80px; height:80px; background:linear-gradient(135deg,#001a4d,#003380);
+    border:2px solid rgba(0,180,255,0.3); border-radius:20px;
+    display:flex; align-items:center; justify-content:center; font-size:36px;
+    animation:glow 2s ease-in-out infinite;
+  }
+  .loading-title { font-size:22px; font-weight:700; color:var(--text-primary); }
+  .loading-status { font-size:13px; color:var(--accent); min-height:20px; }
+  .loading-bar-outer { width:300px; height:3px; background:rgba(255,255,255,0.05); border-radius:2px; overflow:hidden; }
+  .loading-bar-inner { height:100%; background:linear-gradient(90deg,var(--accent2),var(--accent)); border-radius:2px; transition:width 0.4s ease; }
+  .loading-dots { display:flex; gap:6px; }
+  .loading-dot { width:6px; height:6px; border-radius:50%; background:var(--accent); opacity:0.3; animation:pulse 1.2s ease-in-out infinite; }
+  .loading-dot:nth-child(2) { animation-delay:0.2s; }
+  .loading-dot:nth-child(3) { animation-delay:0.4s; }
+
+  /* Landing page */
+  .landing { position:relative; min-height:100vh; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:40px 24px; text-align:center; }
+  .landing-hero-badge { display:inline-flex; align-items:center; gap:6px; background:rgba(0,180,255,0.08); border:1px solid rgba(0,180,255,0.2); border-radius:20px; padding:6px 14px; font-size:11px; font-weight:600; color:var(--accent); letter-spacing:1.5px; margin-bottom:24px; }
+  .landing-title { font-size:clamp(36px,6vw,72px); font-weight:800; line-height:1.1; margin-bottom:8px; background:linear-gradient(135deg,#fff 30%,#7eb8d4 80%); -webkit-background-clip:text; -webkit-text-fill-color:transparent; }
+  .landing-sub-title { font-size:clamp(20px,3vw,32px); font-weight:300; color:var(--accent); margin-bottom:20px; }
+  .landing-desc { font-size:15px; color:var(--text-secondary); max-width:560px; line-height:1.7; margin-bottom:36px; }
+  .landing-btns { display:flex; gap:14px; justify-content:center; flex-wrap:wrap; margin-bottom:60px; }
+  .btn-landing-primary {
+    background:linear-gradient(135deg,#0052cc,#00aaff); color:#fff; border:none;
+    padding:16px 36px; border-radius:10px; font-size:15px; font-weight:700;
+    cursor:pointer; transition:all 0.2s; letter-spacing:0.5px;
+  }
+  .btn-landing-primary:hover { transform:translateY(-2px); box-shadow:0 12px 36px rgba(0,100,255,0.5); }
+  .btn-landing-secondary {
+    background:transparent; color:var(--accent); border:1.5px solid rgba(0,180,255,0.4);
+    padding:15px 32px; border-radius:10px; font-size:15px; font-weight:600;
+    cursor:pointer; transition:all 0.2s;
+  }
+  .btn-landing-secondary:hover { background:rgba(0,180,255,0.08); border-color:var(--accent); }
+  .landing-flow { display:flex; align-items:center; gap:8px; flex-wrap:wrap; justify-content:center; }
+  .landing-flow-node { background:rgba(0,180,255,0.08); border:1px solid rgba(0,180,255,0.2); border-radius:8px; padding:8px 14px; font-size:12px; font-weight:600; color:var(--text-secondary); }
+  .landing-flow-arrow { color:var(--accent); font-size:18px; }
+
+  /* Overview cards */
+  .component-card {
+    background:var(--bg-card); border:1px solid var(--border); border-radius:12px;
+    padding:16px; cursor:pointer; transition:all 0.25s; display:flex; flex-direction:column; gap:8px;
+  }
+  .component-card:hover { border-color:rgba(0,180,255,0.4); transform:translateY(-2px); box-shadow:0 8px 24px rgba(0,0,0,0.3); }
+  .component-card.selected { border-color:var(--accent); background:rgba(0,180,255,0.08); }
+  .component-icon { font-size:24px; }
+  .component-name { font-size:13px; font-weight:600; color:var(--text-primary); }
+  .component-desc { font-size:12px; color:var(--text-dim); line-height:1.5; }
+
+  /* Key display */
+  .key-display {
+    background:rgba(2,8,20,0.9); border:1px solid rgba(0,180,255,0.15);
+    border-radius:10px; padding:16px; font-family:'Courier New',monospace;
+    font-size:11px; line-height:1.6; word-break:break-all;
+  }
+  .key-display.public { border-left:3px solid var(--accent); }
+  .key-display.private { border-left:3px solid var(--warn); }
+
+  /* Certificate card */
+  .cert-card {
+    background:linear-gradient(135deg,rgba(4,18,45,0.95),rgba(2,12,30,0.95));
+    border:1px solid rgba(0,180,255,0.2); border-radius:16px; overflow:hidden;
+  }
+  .cert-header {
+    background:linear-gradient(90deg,rgba(0,50,130,0.5),rgba(0,30,80,0.5));
+    padding:20px 24px; border-bottom:1px solid rgba(0,180,255,0.15);
+    display:flex; align-items:center; gap:16px;
+  }
+  .cert-seal { width:52px; height:52px; background:linear-gradient(135deg,#003399,#0066ff); border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:22px; border:2px solid rgba(0,180,255,0.4); }
+  .cert-body { padding:20px 24px; }
+  .cert-field { display:flex; justify-content:space-between; align-items:flex-start; padding:10px 0; border-bottom:1px solid rgba(255,255,255,0.04); }
+  .cert-field:last-child { border-bottom:none; }
+  .cert-field-label { font-size:11px; color:var(--text-dim); text-transform:uppercase; letter-spacing:0.5px; }
+  .cert-field-value { font-size:12px; color:var(--text-secondary); text-align:right; max-width:60%; font-family:'Courier New',monospace; word-break:break-all; }
+
+  /* Validation checks */
+  .check-item {
+    display:flex; align-items:center; gap:12px; padding:12px 16px;
+    border-radius:8px; margin-bottom:8px; transition:all 0.3s;
+  }
+  .check-item.idle { background:rgba(255,255,255,0.02); border:1px solid var(--border); }
+  .check-item.running { background:rgba(0,180,255,0.05); border:1px solid rgba(0,180,255,0.2); animation:borderGlow 1.5s infinite; }
+  .check-item.pass { background:rgba(0,230,118,0.06); border:1px solid rgba(0,230,118,0.2); animation:fadeIn 0.3s ease; }
+  .check-item.fail { background:rgba(255,61,113,0.06); border:1px solid rgba(255,61,113,0.2); animation:fadeIn 0.3s ease; }
+  .check-icon { width:28px; height:28px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:13px; flex-shrink:0; }
+  .check-icon.idle { background:rgba(255,255,255,0.05); color:var(--text-dim); }
+  .check-icon.running { background:rgba(0,180,255,0.1); color:var(--accent); animation:spin 1s linear infinite; }
+  .check-icon.pass { background:rgba(0,230,118,0.15); color:var(--success); }
+  .check-icon.fail { background:rgba(255,61,113,0.15); color:var(--error); }
+  .check-text { flex:1; }
+  .check-title { font-size:13px; font-weight:500; color:var(--text-primary); }
+  .check-detail { font-size:11px; color:var(--text-dim); margin-top:2px; }
+
+  /* Auth diagram */
+  .auth-flow {
+    display:grid; grid-template-columns:1fr auto 1fr; align-items:center; gap:8px;
+    padding:20px 0;
+  }
+  .auth-box { background:var(--bg-card); border:1px solid var(--border-bright); border-radius:12px; padding:16px; text-align:center; }
+  .auth-box-title { font-size:14px; font-weight:700; color:var(--text-primary); margin-bottom:4px; }
+  .auth-box-icon { font-size:32px; margin-bottom:8px; }
+  .auth-channel { display:flex; flex-direction:column; align-items:center; gap:6px; }
+  .auth-msg {
+    background:rgba(0,180,255,0.08); border:1px solid rgba(0,180,255,0.2);
+    border-radius:6px; padding:6px 10px; font-size:11px; color:var(--accent);
+    white-space:nowrap; position:relative; transition:all 0.3s;
+  }
+  .auth-msg.active { background:rgba(0,180,255,0.15); border-color:var(--accent); box-shadow:0 0 10px rgba(0,180,255,0.3); }
+  .auth-arrow { color:var(--text-dim); font-size:20px; }
+
+  /* Packet animation */
+  .comm-channel {
+    position:relative; height:60px; background:rgba(0,180,255,0.03);
+    border:1px solid rgba(0,180,255,0.1); border-radius:8px; overflow:hidden;
+    display:flex; align-items:center;
+  }
+  .comm-channel-label { font-size:10px; color:var(--text-dim); position:absolute; top:4px; left:8px; }
+  .packet {
+    position:absolute; width:24px; height:24px; background:linear-gradient(135deg,var(--accent2),var(--accent));
+    border-radius:4px; display:flex; align-items:center; justify-content:center;
+    font-size:10px; color:#fff; font-weight:700;
+  }
+  .packet.moving-right { animation:packetMove 1.5s ease-in-out infinite; }
+  .packet.moving-left { animation:packetMoveBack 1.5s ease-in-out infinite; }
+
+  /* Security lab */
+  .scenario-card {
+    background:var(--bg-card); border:1px solid var(--border); border-radius:12px;
+    padding:20px; cursor:pointer; transition:all 0.2s;
+  }
+  .scenario-card:hover { border-color:rgba(255,170,0,0.3); }
+  .scenario-card.active { border-color:var(--warn); background:rgba(255,170,0,0.05); }
+  .scenario-number { font-size:10px; font-weight:700; color:var(--warn); letter-spacing:1px; text-transform:uppercase; }
+  .scenario-title { font-size:15px; font-weight:600; color:var(--text-primary); margin:4px 0 8px; }
+
+  /* Journey timeline */
+  .journey-item {
+    display:flex; gap:16px; padding:16px 0; cursor:pointer; transition:all 0.2s;
+    position:relative;
+  }
+  .journey-step-num {
+    width:40px; height:40px; border-radius:50%; display:flex; align-items:center;
+    justify-content:center; font-size:14px; font-weight:700; flex-shrink:0;
+    border:2px solid; transition:all 0.3s;
+  }
+  .journey-step-num.done { border-color:var(--success); background:rgba(0,230,118,0.1); color:var(--success); }
+  .journey-step-num.active { border-color:var(--accent); background:rgba(0,180,255,0.1); color:var(--accent); animation:glow 2s infinite; }
+  .journey-step-num.pending { border-color:var(--border); background:transparent; color:var(--text-dim); }
+  .journey-line { position:absolute; left:19px; top:56px; width:2px; background:var(--border); bottom:0; }
+  .journey-line.done { background:linear-gradient(180deg,var(--success),var(--border)); }
+  .journey-content { flex:1; }
+  .journey-title { font-size:15px; font-weight:600; color:var(--text-primary); }
+  .journey-desc { font-size:13px; color:var(--text-dim); margin-top:4px; }
+  .journey-badge { margin-top:8px; }
+
+  /* Dashboard stats */
+  .stat-card {
+    background:var(--bg-card); border:1px solid var(--border); border-radius:12px;
+    padding:20px; display:flex; flex-direction:column; gap:8px; transition:all 0.2s;
+  }
+  .stat-card:hover { border-color:rgba(0,180,255,0.25); }
+  .stat-icon { font-size:24px; }
+  .stat-value { font-size:28px; font-weight:700; color:var(--text-primary); }
+  .stat-label { font-size:12px; color:var(--text-dim); }
+  .stat-status { font-size:11px; }
+
+  /* Responsive */
+  @media (max-width:768px) {
+    .sidebar { position:fixed; left:0; top:0; bottom:0; transform:translateX(-100%); transition:transform 0.3s; }
+    .sidebar.mobile-open { transform:translateX(0); }
+    .grid-2, .grid-3, .grid-4 { grid-template-columns:1fr; }
+    .landing-title { font-size:32px; }
+    .auth-flow { grid-template-columns:1fr; }
+    .page-content { padding:16px; }
+  }
+
+  /* Completion page */
+  .completion-star { font-size:80px; animation:float 2s ease-in-out infinite; display:block; text-align:center; }
+  .achievement-item {
+    display:flex; align-items:center; gap:12px; padding:12px 16px;
+    background:rgba(0,230,118,0.04); border:1px solid rgba(0,230,118,0.1);
+    border-radius:8px; margin-bottom:8px; animation:fadeInLeft 0.4s ease forwards;
+  }
+  .achievement-icon { font-size:18px; }
+  .achievement-text { font-size:13px; color:var(--text-secondary); }
+
+  /* Notification dot */
+  .notif-dot { width:8px; height:8px; background:var(--error); border-radius:50%; position:absolute; top:2px; right:2px; }
+
+  /* Shimmer loading */
+  .shimmer {
+    background:linear-gradient(90deg,rgba(255,255,255,0.03) 25%,rgba(255,255,255,0.06) 50%,rgba(255,255,255,0.03) 75%);
+    background-size:200% 100%; animation:shimmer 1.5s infinite; border-radius:6px;
+  }
+  
+  /* Trust chain */
+  .trust-chain { display:flex; flex-direction:column; align-items:center; gap:0; }
+  .trust-node {
+    background:var(--bg-card); border:1px solid var(--border); border-radius:10px;
+    padding:12px 20px; text-align:center; cursor:pointer; transition:all 0.2s;
+    min-width:200px;
+  }
+  .trust-node:hover { border-color:var(--accent); }
+  .trust-node.selected { border-color:var(--accent); background:rgba(0,180,255,0.08); }
+  .trust-connector { height:30px; width:2px; background:linear-gradient(180deg,rgba(0,180,255,0.4),rgba(0,180,255,0.2)); position:relative; }
+  .trust-connector::after { content:'▼'; position:absolute; bottom:-8px; left:50%; transform:translateX(-50%); font-size:10px; color:rgba(0,180,255,0.4); }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const { useState, useEffect, useRef, useCallback } = React;
+
+// ─── Utilities ────────────────────────────────────────────────────────────────
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+const randomHex = len => Array.from({length:len}, () => Math.floor(Math.random()*16).toString(16)).join('');
+const randomBase64 = len => {
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
+  let s=''; for(let i=0;i<len;i++) s+=chars[Math.floor(Math.random()*64)]; return s;
+};
+const formatKey = (header, data) => `-----BEGIN ${header}-----\n${data.match(/.{1,64}/g)?.join('\n')}\n-----END ${header}-----`;
+const genPublicKey = () => formatKey('PUBLIC KEY', 'MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8A'+randomBase64(200)+'IDAQAB');
+const genPrivateKey = () => formatKey('PRIVATE KEY', 'MIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQC'+randomBase64(300)+'DAQAB');
+const genFingerprint = () => randomHex(64).match(/.{2}/g).join(':').toUpperCase();
+const genSerial = () => randomHex(16).toUpperCase().match(/.{2}/g).join(':');
+const now = () => new Date();
+const dateStr = (d) => d.toLocaleDateString('en-GB', {day:'2-digit',month:'short',year:'numeric'});
+const addYear = (d,y=1) => { const n=new Date(d); n.setFullYear(n.getFullYear()+y); return n; };
+
+// ─── Initial State ────────────────────────────────────────────────────────────
+const initState = () => ({
+  currentPage: 'landing',
+  loading: true,
+  sidebarCollapsed: false,
+  progress: {
+    overview: false, keygen: false, csr: false, ca: false,
+    certificate: false, validation: false, auth: false,
+    communication: false, management: false, revocation: false,
+    securityLab: false, journey: false
+  },
+  keyPair: null,
+  userInfo: { name:'', org:'', domain:'', email:'' },
+  csr: null,
+  certificate: null,
+  certificates: [
+    { id:1, cn:'secure-demo.example', org:'Secure Labs', issuer:'PKI Learning Root CA', status:'valid', validFrom:new Date('2026-01-15'), validTo:new Date('2027-01-15'), serial:genSerial(), fingerprint:genFingerprint() },
+    { id:2, cn:'api-demo.example', org:'API Services Inc.', issuer:'PKI Learning Root CA', status:'valid', validFrom:new Date('2026-03-10'), validTo:new Date('2027-03-10'), serial:genSerial(), fingerprint:genFingerprint() },
+    { id:3, cn:'expired-demo.example', org:'Old Corp', issuer:'PKI Learning Root CA', status:'expired', validFrom:new Date('2024-01-01'), validTo:new Date('2025-01-01'), serial:genSerial(), fingerprint:genFingerprint() },
+    { id:4, cn:'revoked-demo.example', org:'Revoked Inc.', issuer:'PKI Learning Root CA', status:'revoked', validFrom:new Date('2025-06-01'), validTo:new Date('2026-06-01'), serial:genSerial(), fingerprint:genFingerprint() },
+    { id:5, cn:'pending-demo.example', org:'Startup Co.', issuer:'—', status:'pending', validFrom:null, validTo:null, serial:'PENDING', fingerprint:'—' },
+  ],
+  notifications: 1,
+  demoMode: false,
+  authStep: -1,
+  commStep: -1,
+  revocationStatus: 'valid',
+  selectedCert: null,
+  trustStatus: 'establishing',
+});
+
+// ─── Explanation data ─────────────────────────────────────────────────────────
+const EXPLANATIONS = {
+  ca: { title:'Certificate Authority (CA)', text:'A Certificate Authority is a trusted organization that issues digital certificates. It verifies the identity of entities (like websites or organizations) and binds their identity to a public key by issuing a digitally signed certificate. The CA acts as the root of trust in PKI.' },
+  publicKey: { title:'Public Key', text:'A public key is a cryptographic key that can be shared openly with anyone. It is used to encrypt data or verify digital signatures. Anyone with the public key can verify that a message was signed by the corresponding private key holder.' },
+  privateKey: { title:'Private Key', text:'A private key is a secret cryptographic key that must never be shared. It is mathematically paired with the public key. It is used to decrypt data encrypted with the public key, or to create digital signatures that prove identity.' },
+  certificate: { title:'Digital Certificate', text:'A digital certificate is an electronic document that binds a public key to an identity (like a domain name or organization). It is signed by a Certificate Authority to prove authenticity. Browsers use certificates to verify that a website is who it claims to be.' },
+  csr: { title:'Certificate Signing Request (CSR)', text:'A CSR is a message sent from an applicant to a CA to apply for a digital certificate. It contains the applicant\'s public key, identity information, and is digitally signed by the applicant\'s private key. The CA uses this to verify identity before issuing a certificate.' },
+  signature: { title:'Digital Signature', text:'A digital signature is a cryptographic mechanism that proves authenticity and integrity. Data is signed using a private key, producing a signature. Anyone with the corresponding public key can verify the signature, confirming the data came from the key holder and was not tampered with.' },
+  trustChain: { title:'Trust Chain / Certificate Chain', text:'A trust chain is the ordered list of certificates linking a server certificate back to a trusted root CA. Each certificate is signed by the one above it. Browsers and systems have a built-in list of trusted root CAs. If the chain leads to a trusted root, the certificate is trusted.' },
+  validation: { title:'Certificate Validation', text:'Certificate validation is the process of verifying that a certificate is authentic, trusted, and currently valid. This includes checking the certificate format, verifying the CA\'s signature, checking the expiry date, verifying the domain, and validating the trust chain up to a trusted root CA.' },
+};
+
+// ─── Explain Button Component ─────────────────────────────────────────────────
+function ExplainBtn({ topic }) {
+  const [open, setOpen] = useState(false);
+  const info = EXPLANATIONS[topic];
+  if (!info) return null;
+  return (
+    <div style={{display:'inline-block',marginTop:'8px'}}>
+      <span className="explain-btn" onClick={()=>setOpen(o=>!o)}>
+        ❓ What is this?
+      </span>
+      {open && (
+        <div className="explain-panel">
+          <div style={{fontWeight:600,color:'var(--accent)',marginBottom:'6px'}}>{info.title}</div>
+          {info.text}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Modal ────────────────────────────────────────────────────────────────────
+function Modal({ title, children, onClose, actions }) {
+  return (
+    <div className="modal-overlay" onClick={e=>e.target===e.currentTarget&&onClose()}>
+      <div className="modal-box">
+        <div className="modal-title">{title}</div>
+        <div className="modal-body">{children}</div>
+        {actions && <div className="modal-actions">{actions}</div>}
+      </div>
+    </div>
+  );
+}
+
+// ─── Loading Screen ───────────────────────────────────────────────────────────
+function LoadingScreen({ onDone }) {
+  const steps = [
+    'Initializing Trust Infrastructure...',
+    'Loading Certificate Authority...',
+    'Loading Certificate Store...',
+    'Establishing Simulation Environment...',
+    'PKI Environment Ready ✓'
+  ];
+  const [step, setStep] = useState(0);
+  const [progress, setProgress] = useState(0);
+
+  useEffect(() => {
+    let i = 0;
+    const interval = setInterval(() => {
+      i++;
+      setStep(i);
+      setProgress(Math.min((i / steps.length) * 100, 100));
+      if (i >= steps.length) {
+        clearInterval(interval);
+        setTimeout(onDone, 600);
+      }
+    }, 600);
+    return () => clearInterval(interval);
+  }, []);
+
+  return (
+    <div className="loading-screen">
+      <div className="grid-bg" />
+      <div className="loading-logo">🔐</div>
+      <div className="loading-title">PKI SIMULATOR</div>
+      <div style={{fontSize:'12px',color:'var(--text-dim)',letterSpacing:'3px'}}>INTERACTIVE LEARNING PLATFORM</div>
+      <div style={{height:'30px',display:'flex',alignItems:'center'}}>
+        <div className="loading-status">{steps[Math.min(step,steps.length-1)]}</div>
+      </div>
+      <div className="loading-bar-outer">
+        <div className="loading-bar-inner" style={{width:`${progress}%`}} />
+      </div>
+      <div className="loading-dots">
+        <div className="loading-dot" /><div className="loading-dot" /><div className="loading-dot" />
+      </div>
+    </div>
+  );
+}
+
+// ─── Sidebar ──────────────────────────────────────────────────────────────────
+const NAV_ITEMS = [
+  { id:'dashboard', label:'Dashboard', icon:'📊', section:'main' },
+  { id:'overview', label:'PKI Overview', icon:'🌐', section:'main' },
+  { id:'keygen', label:'Key Generation', icon:'🔑', section:'simulation' },
+  { id:'csr', label:'CSR Lab', icon:'📋', section:'simulation' },
+  { id:'ca', label:'Certificate Authority', icon:'🏛️', section:'simulation' },
+  { id:'certificate', label:'Certificates', icon:'📜', section:'simulation' },
+  { id:'validation', label:'Validation Lab', icon:'✅', section:'simulation' },
+  { id:'auth', label:'Authentication', icon:'🛡️', section:'simulation' },
+  { id:'communication', label:'Secure Comms', icon:'🔒', section:'simulation' },
+  { id:'management', label:'Cert Management', icon:'📁', section:'management' },
+  { id:'revocation', label:'Revocation', icon:'🚫', section:'management' },
+  { id:'securityLab', label:'Security Lab', icon:'⚠️', section:'management' },
+  { id:'journey', label:'PKI Journey', icon:'🗺️', section:'management' },
+];
+
+function Sidebar({ currentPage, progress, collapsed, onNavigate, onToggle }) {
+  const completedCount = Object.values(progress).filter(Boolean).length;
+  const totalCount = Object.keys(progress).length;
+  const pct = Math.round((completedCount / totalCount) * 100);
+
+  const getStatus = (id) => {
+    if (id === currentPage) return 'current';
+    if (progress[id]) return 'completed';
+    return 'idle';
+  };
+
+  const sections = { main:'CORE', simulation:'SIMULATION', management:'MANAGEMENT' };
+  let lastSection = null;
+
+  return (
+    <div className={`sidebar ${collapsed?'collapsed':''}`}>
+      <div className="sidebar-header">
+        <div className="sidebar-logo">🔐</div>
+        {!collapsed && (
+          <div style={{flex:1,overflow:'hidden'}}>
+            <div className="sidebar-title">PKI SIMULATOR</div>
+            <div className="sidebar-subtitle">Cybersecurity Lab</div>
+          </div>
+        )}
+        <button className="btn-icon" onClick={onToggle} style={{flexShrink:0}}>
+          {collapsed ? '→' : '←'}
+        </button>
+      </div>
+
+      <div className="sidebar-nav">
+        {NAV_ITEMS.map(item => {
+          const showSection = !collapsed && item.section !== lastSection;
+          if (showSection) lastSection = item.section;
+          const status = getStatus(item.id);
+          return (
+            <React.Fragment key={item.id}>
+              {showSection && <div className="nav-section-label">{sections[item.section]}</div>}
+              <div
+                className={`nav-item ${status} ${status==='completed'?'completed':''} ${currentPage===item.id?'active':''}`}
+                onClick={() => onNavigate(item.id)}
+                title={collapsed ? item.label : ''}
+              >
+                <span className="nav-icon">{item.icon}</span>
+                {!collapsed && <span className="nav-label">{item.label}</span>}
+                {!collapsed && (
+                  <span className="nav-status">
+                    {status==='completed' ? '✓' : status==='current' ? '●' : '○'}
+                  </span>
+                )}
+              </div>
+            </React.Fragment>
+          );
+        })}
+      </div>
+
+      {!collapsed && (
+        <div className="sidebar-progress">
+          <div className="progress-label">
+            <span>Journey</span>
+            <span style={{color:'var(--accent)'}}>{completedCount}/{totalCount}</span>
+          </div>
+          <div className="progress-bar-outer">
+            <div className="progress-bar-inner" style={{width:`${pct}%`}} />
+          </div>
+          <div style={{fontSize:'11px',color:'var(--text-dim)',marginTop:'6px'}}>{pct}% Complete</div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Topbar ───────────────────────────────────────────────────────────────────
+function Topbar({ currentPage, trustStatus, notifications, onNavigate, onReset }) {
+  const pageNames = {
+    dashboard:'Dashboard', overview:'PKI Overview', keygen:'Key Generation',
+    csr:'CSR Lab', ca:'Certificate Authority', certificate:'Certificates',
+    validation:'Validation Lab', auth:'Authentication', communication:'Secure Communication',
+    management:'Cert Management', revocation:'Revocation', securityLab:'Security Lab',
+    journey:'PKI Journey', landing:'Welcome', completion:'Complete'
+  };
+  const [showResetModal, setShowResetModal] = useState(false);
+
+  return (
+    <>
+      <div className="topbar">
+        <div className="topbar-stage">
+          Stage: <span>{pageNames[currentPage] || currentPage}</span>
+        </div>
+        <div className="topbar-divider" />
+        <div className="status-pill">
+          <div className="status-dot online" />
+          <span style={{fontSize:'11px',color:'var(--text-secondary)'}}>PKI ENV: ONLINE</span>
+        </div>
+        <div className="status-pill">
+          <div className="status-dot verified" />
+          <span style={{fontSize:'11px',color:'var(--accent)'}}>TRUST: {trustStatus==='established'?'VERIFIED ✓':'ESTABLISHING...'}</span>
+        </div>
+        <div className="topbar-spacer" />
+        <button className="topbar-btn" style={{position:'relative'}} onClick={()=>onNavigate('journey')}>
+          🗺️ Journey
+          {notifications>0 && <span className="notif-dot" />}
+        </button>
+        <button className="topbar-btn" onClick={()=>setShowResetModal(true)}>↺ Reset</button>
+        <button className="topbar-btn" onClick={()=>alert('PKI Simulator v1.0\nInteractive Cybersecurity Learning Platform\n\nBuilt for academic demonstration.\nAll cryptographic values are simulated for educational purposes.')}>
+          ❓ Help
+        </button>
+      </div>
+      {showResetModal && (
+        <Modal
+          title="⚠️ Reset Simulation"
+          onClose={() => setShowResetModal(false)}
+          actions={
+            <>
+              <button className="btn-secondary btn-sm" onClick={()=>setShowResetModal(false)}>Cancel</button>
+              <button className="btn-danger btn-sm" onClick={()=>{onReset();setShowResetModal(false);}}>Reset Simulation</button>
+            </>
+          }
+        >
+          <p>Resetting will clear your current PKI simulation progress, including generated keys, CSR, and certificate data.</p>
+          <p style={{marginTop:'8px'}}>You will be returned to the Overview page.</p>
+        </Modal>
+      )}
+    </>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PAGE: Landing
+// ─────────────────────────────────────────────────────────────────────────────
+function LandingPage({ onStart, onDemo, onExplore }) {
+  return (
+    <div style={{position:'relative',minHeight:'100vh',overflow:'hidden'}}>
+      <div className="grid-bg" />
+      {/* Decorative orbs */}
+      <div style={{position:'absolute',top:'10%',right:'5%',width:'300px',height:'300px',background:'radial-gradient(circle,rgba(0,100,255,0.08),transparent 70%)',borderRadius:'50%',pointerEvents:'none'}} />
+      <div style={{position:'absolute',bottom:'15%',left:'5%',width:'200px',height:'200px',background:'radial-gradient(circle,rgba(0,180,255,0.06),transparent 70%)',borderRadius:'50%',pointerEvents:'none'}} />
+
+      <div className="landing fade-in">
+        <div className="landing-hero-badge">🔐 CYBERSECURITY LAB • EDUCATIONAL SIMULATOR</div>
+        <h1 className="landing-title">PUBLIC KEY<br/>INFRASTRUCTURE</h1>
+        <h2 className="landing-sub-title">Interactive PKI Simulator</h2>
+        <p className="landing-desc">
+          Understand how digital trust is created, verified, and used to secure communication.
+          Explore certificates, cryptography, and the complete PKI ecosystem through interactive simulation.
+        </p>
+
+        <div className="landing-btns">
+          <button className="btn-landing-primary" onClick={onStart}>
+            🚀 Start Simulation
+          </button>
+          <button className="btn-landing-secondary" onClick={onExplore}>
+            🌐 Explore PKI
+          </button>
+          <button className="btn-landing-secondary" onClick={onDemo} style={{borderColor:'rgba(0,255,179,0.4)',color:'var(--accent3)'}}>
+            ⚡ Quick Demo
+          </button>
+        </div>
+
+        {/* Flow preview */}
+        <div style={{marginBottom:'40px'}}>
+          <div style={{fontSize:'12px',color:'var(--text-dim)',marginBottom:'16px',letterSpacing:'1px',textTransform:'uppercase'}}>PKI Process Flow</div>
+          <div className="landing-flow">
+            {['Identity','Keys','Certificate','CA','Verification','Secure Communication'].map((n,i,arr) => (
+              <React.Fragment key={n}>
+                <div className="landing-flow-node">{n}</div>
+                {i<arr.length-1 && <div className="landing-flow-arrow">→</div>}
+              </React.Fragment>
+            ))}
+          </div>
+        </div>
+
+        {/* Feature cards */}
+        <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(200px,1fr))',gap:'12px',maxWidth:'900px',width:'100%'}}>
+          {[
+            {icon:'🔑',title:'Key Generation',desc:'Generate cryptographic key pairs interactively'},
+            {icon:'📋',title:'CSR Creation',desc:'Build Certificate Signing Requests step by step'},
+            {icon:'🏛️',title:'CA Operations',desc:'Approve, sign, and manage certificates'},
+            {icon:'🛡️',title:'Validation Lab',desc:'Test valid and invalid certificate scenarios'},
+            {icon:'🔒',title:'Secure Comms',desc:'Simulate encrypted data transmission'},
+            {icon:'⚠️',title:'Security Lab',desc:'Explore PKI attack scenarios and defences'},
+          ].map(f => (
+            <div key={f.title} className="glass-card" style={{textAlign:'left',cursor:'default'}}>
+              <div style={{fontSize:'22px',marginBottom:'8px'}}>{f.icon}</div>
+              <div style={{fontSize:'13px',fontWeight:'600',color:'var(--text-primary)',marginBottom:'4px'}}>{f.title}</div>
+              <div style={{fontSize:'12px',color:'var(--text-dim)',lineHeight:'1.5'}}>{f.desc}</div>
+            </div>
+          ))}
+        </div>
+
+        <div style={{marginTop:'40px',fontSize:'11px',color:'var(--text-dim)',maxWidth:'500px',textAlign:'center'}}>
+          ⚠️ This is an educational simulation. All cryptographic values shown are simulated for learning purposes and do not represent production PKI infrastructure.
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PAGE: Dashboard
+// ─────────────────────────────────────────────────────────────────────────────
+function DashboardPage({ progress, certificate, keyPair, onNavigate }) {
+  const completedCount = Object.values(progress).filter(Boolean).length;
+  const totalCount = Object.keys(progress).length;
+  const pct = Math.round((completedCount / totalCount) * 100);
+  const trustEstablished = progress.certificate && progress.validation && progress.auth;
+
+  const stats = [
+    { icon:'🔑', label:'Keys Generated', value:keyPair?'YES':'NO', status:keyPair?'success':'idle', page:'keygen' },
+    { icon:'📋', label:'CSR Created', value:progress.csr?'YES':'NO', status:progress.csr?'success':'idle', page:'csr' },
+    { icon:'📜', label:'Certificate Issued', value:progress.certificate?'YES':'NO', status:progress.certificate?'success':'idle', page:'certificate' },
+    { icon:'✅', label:'Certificate Validated', value:progress.validation?'YES':'NO', status:progress.validation?'success':'idle', page:'validation' },
+    { icon:'🛡️', label:'Authentication', value:progress.auth?'YES':'NO', status:progress.auth?'success':'idle', page:'auth' },
+    { icon:'🔒', label:'Secure Session', value:progress.communication?'YES':'NO', status:progress.communication?'success':'idle', page:'communication' },
+    { icon:'📁', label:'Cert Managed', value:progress.management?'YES':'NO', status:progress.management?'success':'idle', page:'management' },
+    { icon:'⚠️', label:'Security Lab', value:progress.securityLab?'YES':'NO', status:progress.securityLab?'success':'idle', page:'securityLab' },
+  ];
+
+  return (
+    <div className="fade-in">
+      <div className="page-header">
+        <div className="page-eyebrow">CONTROL CENTER</div>
+        <div className="page-title">PKI Dashboard</div>
+        <div className="page-subtitle">Monitor your simulation progress and PKI environment status.</div>
+      </div>
+
+      {/* Trust status banner */}
+      <div style={{background:trustEstablished?'rgba(0,230,118,0.06)':'rgba(0,180,255,0.04)',border:`1px solid ${trustEstablished?'rgba(0,230,118,0.2)':'rgba(0,180,255,0.15)'}`,borderRadius:'12px',padding:'16px 20px',marginBottom:'24px',display:'flex',alignItems:'center',gap:'12px',animation:'borderGlow 3s infinite'}}>
+        <div style={{fontSize:'28px'}}>{trustEstablished?'🟢':'🟡'}</div>
+        <div>
+          <div style={{fontSize:'15px',fontWeight:'700',color:trustEstablished?'var(--success)':'var(--warn)'}}>
+            {trustEstablished ? 'TRUST ESTABLISHED ✓' : 'Trust Being Established...'}
+          </div>
+          <div style={{fontSize:'12px',color:'var(--text-dim)',marginTop:'2px'}}>
+            {trustEstablished ? 'PKI infrastructure is fully operational and verified.' : 'Complete more stages to establish full trust chain.'}
+          </div>
+        </div>
+        <div style={{marginLeft:'auto',textAlign:'right'}}>
+          <div style={{fontSize:'28px',fontWeight:'800',color:trustEstablished?'var(--success)':'var(--accent)'}}>{pct}%</div>
+          <div style={{fontSize:'11px',color:'var(--text-dim)'}}>Progress</div>
+        </div>
+      </div>
+
+      {/* Progress bar */}
+      <div className="card" style={{marginBottom:'24px'}}>
+        <div style={{display:'flex',justifyContent:'space-between',marginBottom:'12px'}}>
+          <div style={{fontSize:'14px',fontWeight:'600'}}>PKI Simulation Progress</div>
+          <div style={{fontSize:'13px',color:'var(--accent)'}}>{completedCount} / {totalCount} stages</div>
+        </div>
+        <div className="progress-bar-outer" style={{height:'8px'}}>
+          <div className="progress-bar-inner" style={{width:`${pct}%`}} />
+        </div>
+        <div style={{display:'flex',justifyContent:'space-between',marginTop:'8px'}}>
+          {'▓'.repeat(Math.floor(pct/6.25)).padEnd(16,'░').split('').map((c,i)=>(
+            <span key={i} style={{color:c==='▓'?'var(--accent)':'var(--text-dim)',fontSize:'14px'}}>{c}</span>
+          ))}
+        </div>
+      </div>
+
+      {/* Stats grid */}
+      <div className="grid-4" style={{marginBottom:'24px'}}>
+        {stats.map(s => (
+          <div key={s.label} className="stat-card" onClick={()=>onNavigate(s.page)} style={{cursor:'pointer'}}>
+            <div className="stat-icon">{s.icon}</div>
+            <div className={`badge ${s.status==='success'?'badge-success':'badge-info'}`}>{s.value}</div>
+            <div className="stat-label">{s.label}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* Current stage + continue */}
+      <div className="grid-2">
+        <div className="card">
+          <div style={{fontSize:'13px',fontWeight:'600',marginBottom:'12px',color:'var(--accent)'}}>📍 Current Stage</div>
+          {(() => {
+            const next = ['overview','keygen','csr','ca','certificate','validation','auth','communication','management','revocation','securityLab','journey'].find(p=>!progress[p]);
+            const item = NAV_ITEMS.find(n=>n.id===next);
+            return next ? (
+              <>
+                <div style={{fontSize:'18px',fontWeight:'700',marginBottom:'6px'}}>{item?.icon} {item?.label}</div>
+                <div style={{fontSize:'12px',color:'var(--text-dim)',marginBottom:'16px'}}>This stage is ready for you to complete.</div>
+                <button className="btn-primary btn-sm" onClick={()=>onNavigate(next)}>Continue →</button>
+              </>
+            ) : (
+              <>
+                <div style={{fontSize:'18px',fontWeight:'700',marginBottom:'6px'}}>🎉 All Complete!</div>
+                <div style={{fontSize:'12px',color:'var(--text-dim)',marginBottom:'16px'}}>You have completed all PKI simulation stages.</div>
+                <button className="btn-primary btn-sm" onClick={()=>onNavigate('completion')}>View Certificate →</button>
+              </>
+            );
+          })()}
+        </div>
+
+        <div className="card">
+          <div style={{fontSize:'13px',fontWeight:'600',marginBottom:'12px',color:'var(--accent)'}}>🏛️ Certificate Authority</div>
+          <div style={{display:'flex',flexDirection:'column',gap:'8px'}}>
+            <div style={{display:'flex',justifyContent:'space-between'}}>
+              <span style={{fontSize:'12px',color:'var(--text-dim)'}}>CA Name</span>
+              <span style={{fontSize:'12px',color:'var(--text-secondary)'}}>PKI Learning Root CA</span>
+            </div>
+            <div style={{display:'flex',justifyContent:'space-between'}}>
+              <span style={{fontSize:'12px',color:'var(--text-dim)'}}>Trust Status</span>
+              <span className="badge badge-success">TRUSTED</span>
+            </div>
+            <div style={{display:'flex',justifyContent:'space-between'}}>
+              <span style={{fontSize:'12px',color:'var(--text-dim)'}}>Certs Issued</span>
+              <span style={{fontSize:'12px',color:'var(--accent)'}}>5</span>
+            </div>
+            <div style={{display:'flex',justifyContent:'space-between'}}>
+              <span style={{fontSize:'12px',color:'var(--text-dim)'}}>Algorithm</span>
+              <span style={{fontSize:'12px',color:'var(--text-secondary)'}}>RSA-2048</span>
+            </div>
+            <button className="btn-secondary btn-sm" style={{marginTop:'8px'}} onClick={()=>onNavigate('ca')}>Open CA →</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PAGE: PKI Overview
+// ─────────────────────────────────────────────────────────────────────────────
+function OverviewPage({ onComplete, onNavigate }) {
+  const [selected, setSelected] = useState(null);
+  const components = [
+    { id:'ca', icon:'🏛️', name:'Certificate Authority (CA)', desc:'Trusted issuer of digital certificates. Root of trust in PKI.', detail:'A Certificate Authority validates identities, signs certificates with its private key, and maintains certificate revocation lists. It is the fundamental trust anchor of the PKI system.' },
+    { id:'ra', icon:'🏢', name:'Registration Authority (RA)', desc:'Verifies identity before certificates are issued.', detail:'The RA acts as an intermediary between the CA and certificate applicants. It verifies the applicant\'s identity and forwards approved requests to the CA for signing.' },
+    { id:'cert', icon:'📜', name:'Digital Certificate', desc:'Electronic document binding identity to a public key.', detail:'A digital certificate contains the subject\'s public key, identity information, CA\'s signature, validity dates, and usage policies. It follows the X.509 standard.' },
+    { id:'pubkey', icon:'🔓', name:'Public Key', desc:'Shareable cryptographic key for encryption and verification.', detail:'The public key can be distributed openly. It encrypts data that only the private key holder can decrypt, and verifies signatures made with the private key.' },
+    { id:'privkey', icon:'🔑', name:'Private Key', desc:'Secret key for decryption and digital signing.', detail:'The private key must remain confidential. It decrypts data encrypted with the matching public key and creates digital signatures proving identity.' },
+    { id:'sig', icon:'✍️', name:'Digital Signature', desc:'Proves authenticity and data integrity.', detail:'Created by hashing data and encrypting the hash with a private key. Verified using the public key. Provides non-repudiation and integrity verification.' },
+    { id:'repo', icon:'🗄️', name:'Certificate Repository', desc:'Database storing issued certificates and CRLs.', detail:'A publicly accessible store where certificates are published and Certificate Revocation Lists (CRLs) are maintained for status checking.' },
+    { id:'user', icon:'👤', name:'End User / Client', desc:'Entity requesting and using certificates.', detail:'End users (people, servers, applications) obtain certificates to prove their identity. They use private keys to authenticate and encrypt communications.' },
+    { id:'server', icon:'🖥️', name:'Secure Server', desc:'Server presenting certificates for authentication.', detail:'A secure server presents its certificate during the TLS handshake. Clients validate this certificate against trusted CAs before establishing secure sessions.' },
+  ];
+  const whyPKI = [
+    {icon:'🆔',title:'Identity Verification',desc:'Confirms that an entity (person, server, organization) is who they claim to be.'},
+    {icon:'🔒',title:'Secure Communication',desc:'Enables encrypted channels that protect data in transit from eavesdropping.'},
+    {icon:'🔍',title:'Data Integrity',desc:'Detects any tampering or modification of data during transmission.'},
+    {icon:'🛡️',title:'Authentication',desc:'Provides strong proof of identity without sharing passwords.'},
+    {icon:'🤝',title:'Trust Establishment',desc:'Creates a chain of trust from users to well-known trusted authorities.'},
+    {icon:'📝',title:'Non-Repudiation',desc:'Prevents entities from denying actions they have digitally signed.'},
+  ];
+
+  return (
+    <div className="fade-in">
+      <div className="page-header">
+        <div className="page-eyebrow">STAGE 1 • PKI ECOSYSTEM</div>
+        <div className="page-title">PKI Overview</div>
+        <div className="page-subtitle">Explore the components of Public Key Infrastructure and understand how they interact to create digital trust.</div>
+      </div>
+
+      {/* Components grid */}
+      <div style={{marginBottom:'28px'}}>
+        <div style={{fontSize:'13px',fontWeight:'600',color:'var(--accent)',marginBottom:'14px'}}>PKI Components — Click to explore</div>
+        <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(200px,1fr))',gap:'12px'}}>
+          {components.map(c => (
+            <div key={c.id} className={`component-card ${selected?.id===c.id?'selected':''}`} onClick={()=>setSelected(selected?.id===c.id?null:c)}>
+              <div className="component-icon">{c.icon}</div>
+              <div className="component-name">{c.name}</div>
+              <div className="component-desc">{c.desc}</div>
+            </div>
+          ))}
+        </div>
+        {selected && (
+          <div className="card" style={{marginTop:'14px',borderColor:'rgba(0,180,255,0.3)',animation:'slideDown 0.2s ease'}}>
+            <div style={{display:'flex',alignItems:'center',gap:'10px',marginBottom:'10px'}}>
+              <span style={{fontSize:'24px'}}>{selected.icon}</span>
+              <div style={{fontWeight:'600',color:'var(--accent)'}}>{selected.name}</div>
+            </div>
+            <div style={{fontSize:'13px',color:'var(--text-secondary)',lineHeight:'1.7'}}>{selected.detail}</div>
+            <button className="btn-icon" style={{marginTop:'10px',width:'auto',padding:'4px 12px',fontSize:'11px'}} onClick={()=>setSelected(null)}>✕ Close</button>
+          </div>
+        )}
+      </div>
+
+      {/* Why PKI */}
+      <div className="card" style={{marginBottom:'24px'}}>
+        <div style={{fontSize:'15px',fontWeight:'700',marginBottom:'16px'}}>Why PKI?</div>
+        <div className="grid-3">
+          {whyPKI.map(w => (
+            <div key={w.title} style={{display:'flex',gap:'10px',alignItems:'flex-start'}}>
+              <div style={{fontSize:'20px',flexShrink:0}}>{w.icon}</div>
+              <div>
+                <div style={{fontSize:'13px',fontWeight:'600',color:'var(--text-primary)',marginBottom:'4px'}}>{w.title}</div>
+                <div style={{fontSize:'12px',color:'var(--text-dim)',lineHeight:'1.5'}}>{w.desc}</div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Visual flow */}
+      <div className="card" style={{marginBottom:'24px'}}>
+        <div style={{fontSize:'13px',fontWeight:'600',color:'var(--accent)',marginBottom:'16px'}}>PKI Trust Flow</div>
+        <div style={{display:'flex',alignItems:'center',gap:'6px',flexWrap:'wrap'}}>
+          {['👤 User','→','🔑 Generate Keys','→','📋 Create CSR','→','🏛️ Submit to CA','→','✅ CA Verifies','→','📜 Certificate Issued','→','🔒 Secure Comms'].map((n,i)=>(
+            <div key={i} style={{background:n==='→'?'transparent':'rgba(0,180,255,0.08)',border:n==='→'?'none':'1px solid rgba(0,180,255,0.15)',borderRadius:'6px',padding:n==='→'?'0 4px':'6px 10px',fontSize:'12px',color:n==='→'?'var(--text-dim)':'var(--text-secondary)'}}>
+              {n}
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <button className="btn-primary" onClick={()=>{onComplete(); onNavigate('keygen');}}>
+        Continue to Key Generation →
+      </button>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PAGE: Key Generation
+// ─────────────────────────────────────────────────────────────────────────────
+function KeygenPage({ keyPair, userInfo, onGenerate, onComplete, onNavigate }) {
+  const [form, setForm] = useState(userInfo || { name:'Alice Johnson', org:'Secure Labs Inc.', domain:'secure-demo.example', email:'alice@secure-demo.example' });
+  const [generating, setGenerating] = useState(false);
+  const [showPrivate, setShowPrivate] = useState(false);
+  const [genStep, setGenStep] = useState(-1);
+
+  const genSteps = ['Generating prime numbers...','Computing key pair...','Applying RSA algorithm...','Encoding public key...','Protecting private key...','Key pair ready ✓'];
+
+  const handleGenerate = async () => {
+    if (!form.name || !form.domain) { alert('Please enter at least your name and domain.'); return; }
+    setGenerating(true);
+    setGenStep(0);
+    for (let i=0; i<genSteps.length; i++) {
+      setGenStep(i);
+      await sleep(400);
+    }
+    const pub = genPublicKey();
+    const priv = genPrivateKey();
+    onGenerate({ publicKey:pub, privateKey:priv }, form);
+    setGenerating(false);
+    setGenStep(-1);
+  };
+
+  return (
+    <div className="fade-in">
+      <div className="page-header">
+        <div className="page-eyebrow">STAGE 2 • CRYPTOGRAPHY</div>
+        <div className="page-title">Key Generation Lab</div>
+        <div className="page-subtitle">Generate your RSA cryptographic key pair. Your public key will be shared; your private key must remain secret.</div>
+      </div>
+
+      <div className="grid-2" style={{marginBottom:'24px'}}>
+        {/* Form */}
+        <div className="card">
+          <div style={{fontSize:'14px',fontWeight:'600',marginBottom:'16px',color:'var(--accent)'}}>🆔 Entity Information</div>
+          {[
+            {key:'name',label:'Full Name / Entity Name',placeholder:'e.g. Alice Johnson'},
+            {key:'org',label:'Organization',placeholder:'e.g. Secure Labs Inc.'},
+            {key:'domain',label:'Domain',placeholder:'e.g. secure-demo.example'},
+            {key:'email',label:'Email Address',placeholder:'e.g. alice@example.com'},
+          ].map(f => (
+            <div className="form-group" key={f.key}>
+              <label className="form-label">{f.label.toUpperCase()}</label>
+              <input className="form-input" placeholder={f.placeholder} value={form[f.key]} onChange={e=>setForm(p=>({...p,[f.key]:e.target.value}))} />
+            </div>
+          ))}
+          <div style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+            <div className="info-panel" style={{flex:1,marginRight:'12px',padding:'8px 12px'}}>
+              <div style={{fontSize:'11px'}}>Algorithm: RSA-2048 | Key Size: 2048 bits | Format: PKCS#8</div>
+            </div>
+            <button className="btn-primary" onClick={handleGenerate} disabled={generating}>
+              {generating ? '⟳ Generating...' : '🔑 Generate Key Pair'}
+            </button>
+          </div>
+        </div>
+
+        {/* Key diagram */}
+        <div className="card" style={{display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',gap:'12px'}}>
+          <div style={{textAlign:'center',fontWeight:'700',fontSize:'14px',color:'var(--accent)',marginBottom:'8px'}}>KEY PAIR ARCHITECTURE</div>
+          <div style={{textAlign:'center',padding:'10px 24px',background:'var(--bg-glass)',border:'1px solid var(--border)',borderRadius:'8px',marginBottom:'4px'}}>KEY PAIR</div>
+          <div style={{fontSize:'20px',color:'var(--text-dim)'}}>│</div>
+          <div style={{display:'flex',gap:'24px',alignItems:'flex-start'}}>
+            <div style={{display:'flex',flexDirection:'column',alignItems:'center',gap:'8px'}}>
+              <div style={{padding:'10px 20px',background:'rgba(0,180,255,0.1)',border:'1px solid rgba(0,180,255,0.3)',borderRadius:'8px',textAlign:'center'}}>
+                <div style={{fontSize:'12px',fontWeight:'700',color:'var(--accent)'}}>PUBLIC KEY</div>
+                <div style={{fontSize:'10px',color:'var(--text-dim)',marginTop:'4px'}}>Shareable</div>
+              </div>
+              <div style={{fontSize:'11px',color:'var(--text-dim)',textAlign:'center'}}>Encryption<br/>Verification</div>
+            </div>
+            <div style={{width:'2px',height:'60px',background:'rgba(255,255,255,0.1)',marginTop:'10px'}} />
+            <div style={{display:'flex',flexDirection:'column',alignItems:'center',gap:'8px'}}>
+              <div style={{padding:'10px 20px',background:'rgba(255,170,0,0.1)',border:'1px solid rgba(255,170,0,0.3)',borderRadius:'8px',textAlign:'center'}}>
+                <div style={{fontSize:'12px',fontWeight:'700',color:'var(--warn)'}}>PRIVATE KEY</div>
+                <div style={{fontSize:'10px',color:'var(--text-dim)',marginTop:'4px'}}>Secret</div>
+              </div>
+              <div style={{fontSize:'11px',color:'var(--text-dim)',textAlign:'center'}}>Decryption<br/>Signing</div>
+            </div>
+          </div>
+          <ExplainBtn topic="publicKey" />
+          <ExplainBtn topic="privateKey" />
+        </div>
+      </div>
+
+      {/* Generation animation */}
+      {generating && (
+        <div className="card" style={{marginBottom:'20px',borderColor:'rgba(0,180,255,0.3)'}}>
+          <div style={{fontSize:'13px',fontWeight:'600',color:'var(--accent)',marginBottom:'12px'}}>⟳ Generating Key Pair</div>
+          {genSteps.map((s,i)=>(
+            <div key={i} style={{display:'flex',alignItems:'center',gap:'10px',padding:'6px 0',opacity:i>genStep?0.3:1,transition:'opacity 0.3s'}}>
+              <span style={{fontSize:'14px'}}>{i<genStep?'✓':i===genStep?'⟳':'○'}</span>
+              <span style={{fontSize:'13px',color:i===genStep?'var(--accent)':i<genStep?'var(--success)':'var(--text-dim)'}}>{s}</span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Keys display */}
+      {keyPair && !generating && (
+        <div className="fade-in" style={{marginBottom:'24px'}}>
+          <div className="grid-2" style={{marginBottom:'16px'}}>
+            <div>
+              <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'8px'}}>
+                <div style={{fontSize:'13px',fontWeight:'600',color:'var(--accent)'}}>🔓 Public Key</div>
+                <span className="badge badge-info">SHAREABLE</span>
+              </div>
+              <div className="key-display public" style={{maxHeight:'120px',overflow:'auto'}}>{keyPair.publicKey}</div>
+              <ExplainBtn topic="publicKey" />
+            </div>
+            <div>
+              <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'8px'}}>
+                <div style={{fontSize:'13px',fontWeight:'600',color:'var(--warn)'}}>🔑 Private Key</div>
+                <div style={{display:'flex',gap:'8px',alignItems:'center'}}>
+                  <span className="badge badge-warn">SECRET</span>
+                  <button className="btn-icon" onClick={()=>setShowPrivate(p=>!p)} title={showPrivate?'Hide':'Show'} style={{fontSize:'12px'}}>{showPrivate?'🔒':'👁️'}</button>
+                </div>
+              </div>
+              <div className="key-display private" style={{maxHeight:'120px',overflow:'auto',filter:showPrivate?'none':'blur(4px)',userSelect:showPrivate?'auto':'none'}}>
+                {showPrivate ? keyPair.privateKey : keyPair.privateKey.replace(/[A-Za-z0-9+/]/g,'█')}
+              </div>
+              <div style={{fontSize:'11px',color:'var(--warn)',marginTop:'4px'}}>⚠️ Never share your private key with anyone</div>
+              <ExplainBtn topic="privateKey" />
+            </div>
+          </div>
+          <div style={{display:'flex',alignItems:'center',gap:'12px',padding:'12px 16px',background:'rgba(0,230,118,0.05)',border:'1px solid rgba(0,230,118,0.2)',borderRadius:'8px',marginBottom:'16px'}}>
+            <span style={{fontSize:'20px'}}>🛡️</span>
+            <div>
+              <div style={{fontSize:'13px',fontWeight:'600',color:'var(--success)'}}>Private Key Status: PROTECTED</div>
+              <div style={{fontSize:'12px',color:'var(--text-dim)'}}>Stored securely in simulation environment. Not transmitted.</div>
+            </div>
+          </div>
+          <button className="btn-primary" onClick={()=>{onComplete(); onNavigate('csr');}}>Continue to CSR Lab →</button>
+        </div>
+      )}
+
+      {/* Educational info */}
+      <div className="grid-3">
+        {[
+          {title:'What is a Public Key?',desc:'A public key is safe to share with the world. It is used by others to encrypt messages to you, or to verify your digital signatures.'},
+          {title:'What is a Private Key?',desc:'A private key is your secret. It decrypts messages encrypted with your public key and creates signatures that prove your identity.'},
+          {title:'Why keep Private Key secret?',desc:'Anyone with your private key can impersonate you, read your encrypted messages, and sign documents as you. It must never be shared.'},
+        ].map(i=>(
+          <div key={i.title} className="info-panel">
+            <div style={{fontWeight:'600',color:'var(--accent)',marginBottom:'6px',fontSize:'12px'}}>{i.title}</div>
+            <div style={{fontSize:'12px'}}>{i.desc}</div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PAGE: CSR Lab
+// ─────────────────────────────────────────────────────────────────────────────
+function CSRPage({ keyPair, userInfo, csr, onGenerate, onSubmit, onComplete, onNavigate }) {
+  const [form, setForm] = useState({
+    commonName: userInfo?.domain || 'secure-demo.example',
+    org: userInfo?.org || 'Secure Labs Inc.',
+    country: 'IN',
+    email: userInfo?.email || 'alice@secure-demo.example',
+    domain: userInfo?.domain || 'secure-demo.example',
+  });
+  const [generated, setGenerated] = useState(!!csr);
+  const [submitted, setSubmitted] = useState(false);
+  const [animating, setAnimating] = useState(false);
+
+  const handleGenerate = () => {
+    const fp = keyPair ? genFingerprint() : genFingerprint();
+    const ts = new Date().toISOString();
+    const csrData = {
+      commonName: form.commonName,
+      org: form.org,
+      country: form.country,
+      email: form.email,
+      domain: form.domain,
+      publicKeyFingerprint: fp,
+      timestamp: ts,
+      signature: randomHex(64).toUpperCase(),
+    };
+    onGenerate(csrData);
+    setGenerated(true);
+  };
+
+  const handleSubmit = async () => {
+    setAnimating(true);
+    await sleep(2500);
+    setAnimating(false);
+    setSubmitted(true);
+    onComplete();
+  };
+
+  const csrText = csr ? `-----BEGIN CERTIFICATE REQUEST-----
+
+Subject Information:
+  Common Name  : ${csr.commonName}
+  Organization : ${csr.org}
+  Country      : ${csr.country}
+  Email        : ${csr.email}
+  Domain       : ${csr.domain}
+
+Public Key Fingerprint:
+  SHA256: ${csr.publicKeyFingerprint?.substring(0,32)}...
+
+Signature Algorithm: SHA256withRSA
+
+Signature:
+  ${csr.signature?.substring(0,32)}...
+
+Timestamp: ${csr.timestamp}
+
+-----END CERTIFICATE REQUEST-----` : '';
+
+  return (
+    <div className="fade-in">
+      <div className="page-header">
+        <div className="page-eyebrow">STAGE 3 • CERTIFICATE REQUEST</div>
+        <div className="page-title">Create Certificate Signing Request</div>
+        <div className="page-subtitle">A CSR contains your identity information and public key, signed with your private key, sent to the CA for certificate issuance.</div>
+      </div>
+
+      {!keyPair && (
+        <div style={{padding:'16px 20px',background:'rgba(255,170,0,0.06)',border:'1px solid rgba(255,170,0,0.25)',borderRadius:'10px',marginBottom:'20px'}}>
+          ⚠️ You haven't generated a key pair yet. <button className="btn-secondary btn-sm" style={{marginLeft:'8px'}} onClick={()=>onNavigate('keygen')}>Go to Key Generation</button>
+        </div>
+      )}
+
+      <div className="grid-2" style={{marginBottom:'24px'}}>
+        <div>
+          <div className="card" style={{marginBottom:'16px'}}>
+            <div style={{fontSize:'14px',fontWeight:'600',marginBottom:'16px',color:'var(--accent)'}}>📋 CSR Information</div>
+            {[
+              {key:'commonName',label:'Common Name (CN)',placeholder:'e.g. secure-demo.example'},
+              {key:'org',label:'Organization (O)',placeholder:'e.g. Secure Labs Inc.'},
+              {key:'country',label:'Country (C)',placeholder:'e.g. IN'},
+              {key:'email',label:'Email Address',placeholder:'e.g. admin@example.com'},
+              {key:'domain',label:'Domain (SAN)',placeholder:'e.g. secure-demo.example'},
+            ].map(f=>(
+              <div className="form-group" key={f.key}>
+                <label className="form-label">{f.label.toUpperCase()}</label>
+                <input className="form-input" placeholder={f.placeholder} value={form[f.key]} onChange={e=>setForm(p=>({...p,[f.key]:e.target.value}))} />
+              </div>
+            ))}
+            {keyPair && (
+              <div style={{padding:'8px 12px',background:'rgba(0,180,255,0.06)',border:'1px solid rgba(0,180,255,0.15)',borderRadius:'6px',marginBottom:'12px'}}>
+                <div style={{fontSize:'11px',color:'var(--text-dim)'}}>PUBLIC KEY (from Key Generation)</div>
+                <div style={{fontSize:'11px',color:'var(--accent)',fontFamily:'monospace',marginTop:'2px',wordBreak:'break-all'}}>{keyPair.publicKey.substring(0,80)}...</div>
+              </div>
+            )}
+            <button className="btn-primary" onClick={handleGenerate}>
+              📋 Generate CSR
+            </button>
+            <ExplainBtn topic="csr" />
+          </div>
+        </div>
+
+        {/* CSR Preview */}
+        <div>
+          <div style={{fontSize:'13px',fontWeight:'600',color:'var(--accent)',marginBottom:'10px'}}>CSR Preview</div>
+          {generated && csr ? (
+            <div className="code-block fade-in" style={{marginBottom:'12px'}}>{csrText}</div>
+          ) : (
+            <div style={{background:'rgba(255,255,255,0.02)',border:'1px dashed var(--border)',borderRadius:'8px',padding:'40px',textAlign:'center',color:'var(--text-dim)',fontSize:'13px'}}>
+              Fill in the form and click "Generate CSR" to see the preview
+            </div>
+          )}
+
+          {generated && csr && (
+            <div className="card fade-in" style={{marginBottom:'12px'}}>
+              <div style={{fontSize:'13px',fontWeight:'600',marginBottom:'12px',color:'var(--accent)'}}>CSR Details</div>
+              {[
+                {label:'CSR Status',value:'READY',type:'badge-info'},
+                {label:'Applicant',value:csr.commonName},
+                {label:'Domain',value:csr.domain},
+                {label:'Fingerprint',value:csr.publicKeyFingerprint?.substring(0,24)+'...'},
+                {label:'Timestamp',value:new Date(csr.timestamp).toLocaleString()},
+                {label:'Signature',value:csr.signature?.substring(0,16)+'...'},
+              ].map(d=>(
+                <div key={d.label} style={{display:'flex',justifyContent:'space-between',alignItems:'center',padding:'6px 0',borderBottom:'1px solid rgba(255,255,255,0.04)'}}>
+                  <span style={{fontSize:'12px',color:'var(--text-dim)'}}>{d.label}</span>
+                  {d.type ? <span className={`badge ${d.type}`}>{d.value}</span> : <span style={{fontSize:'12px',color:'var(--text-secondary)',fontFamily:'monospace'}}>{d.value}</span>}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Flow animation */}
+      {animating && (
+        <div className="card fade-in" style={{marginBottom:'20px',textAlign:'center'}}>
+          <div style={{fontSize:'14px',fontWeight:'600',color:'var(--accent)',marginBottom:'16px'}}>Submitting CSR to Certificate Authority...</div>
+          <div style={{display:'flex',alignItems:'center',justifyContent:'center',gap:'16px',flexWrap:'wrap'}}>
+            {['👤 User','→','📋 CSR','→→→','🏛️ Certificate Authority'].map((n,i)=>(
+              <div key={i} style={{
+                padding:n.includes('→')?'0':'10px 16px',
+                background:n.includes('→')?'transparent':i===4?'rgba(0,180,255,0.1)':'rgba(255,255,255,0.04)',
+                border:n.includes('→')?'none':'1px solid rgba(0,180,255,0.2)',
+                borderRadius:'8px',fontSize:'12px',fontWeight:'600',color:n.includes('→')?'var(--accent)':'var(--text-secondary)',
+                animation:n==='→→→'?'pulse 0.5s infinite':'none'
+              }}>{n}</div>
+            ))}
+          </div>
+          <div style={{marginTop:'12px',fontSize:'12px',color:'var(--text-dim)'}}>Transmitting securely...</div>
+        </div>
+      )}
+
+      {submitted && (
+        <div className="card fade-in" style={{marginBottom:'20px',background:'rgba(0,230,118,0.04)',borderColor:'rgba(0,230,118,0.2)',textAlign:'center',padding:'20px'}}>
+          <div style={{fontSize:'28px',marginBottom:'8px'}}>✅</div>
+          <div style={{fontSize:'16px',fontWeight:'700',color:'var(--success)',marginBottom:'4px'}}>CSR Successfully Submitted to CA</div>
+          <div style={{fontSize:'13px',color:'var(--text-dim)'}}>The Certificate Authority is now reviewing your request.</div>
+        </div>
+      )}
+
+      {generated && csr && (
+        <div style={{display:'flex',gap:'12px'}}>
+          <button className="btn-primary" onClick={handleSubmit} disabled={animating}>
+            {animating ? '⟳ Submitting...' : '🏛️ Submit CSR to CA'}
+          </button>
+          {submitted && (
+            <button className="btn-secondary" onClick={()=>onNavigate('ca')}>Open CA Dashboard →</button>
+          )}
+        </div>
+      )}
+
+      <div className="info-panel" style={{marginTop:'20px'}}>
+        <div style={{fontWeight:'600',color:'var(--accent)',marginBottom:'6px'}}>Why is a CSR required?</div>
+        A CSR is the standard method for requesting a certificate from a CA. It includes your identity information and public key. The CA uses this to create your certificate. It is signed with your private key to prove you own the corresponding public key — a process called proof of possession.
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PAGE: Certificate Authority
+// ─────────────────────────────────────────────────────────────────────────────
+function CAPage({ csr, onIssue, onComplete, onNavigate }) {
+  const [step, setStep] = useState(-1);
+  const [issued, setIssued] = useState(false);
+  const [rejected, setRejected] = useState(false);
+
+  const signingSteps = [
+    {label:'CSR Received', icon:'📥', desc:'Certificate Signing Request received from applicant'},
+    {label:'Identity Checked', icon:'🔍', desc:'Verifying applicant identity and domain ownership'},
+    {label:'Public Key Verified', icon:'🔓', desc:'Validating submitted public key integrity'},
+    {label:'Certificate Signed', icon:'✍️', desc:'Signing certificate with CA private key'},
+    {label:'Certificate Issued', icon:'📜', desc:'Certificate sealed and ready for delivery'},
+  ];
+
+  const handleApprove = async () => {
+    for (let i=0; i<signingSteps.length; i++) {
+      setStep(i);
+      await sleep(700);
+    }
+    setIssued(true);
+    const cert = {
+      cn: csr?.commonName || 'secure-demo.example',
+      org: csr?.org || 'Secure Labs Inc.',
+      country: csr?.country || 'IN',
+      email: csr?.email || 'admin@example.com',
+      issuer: 'PKI Learning Root CA',
+      serial: genSerial(),
+      validFrom: now(),
+      validTo: addYear(now(), 1),
+      fingerprint: genFingerprint(),
+      sigAlg: 'SHA256withRSA',
+      version: 'V3',
+      keyUsage: 'Digital Signature, Key Encipherment',
+      extKeyUsage: 'TLS Web Server Authentication',
+      status: 'valid',
+    };
+    onIssue(cert);
+    onComplete();
+  };
+
+  return (
+    <div className="fade-in">
+      <div className="page-header">
+        <div className="page-eyebrow">STAGE 4 • TRUST ANCHOR</div>
+        <div className="page-title">Certificate Authority Control Center</div>
+        <div className="page-subtitle">The CA is the root of trust. It verifies identities and signs certificates, creating the foundation of PKI.</div>
+      </div>
+
+      {/* Root CA info */}
+      <div className="cert-card" style={{marginBottom:'24px'}}>
+        <div className="cert-header">
+          <div className="cert-seal">🏛️</div>
+          <div>
+            <div style={{fontSize:'18px',fontWeight:'700',color:'var(--text-primary)'}}>PKI Learning Root CA</div>
+            <div style={{fontSize:'12px',color:'var(--text-dim)'}}>Root Certificate Authority</div>
+          </div>
+          <div style={{marginLeft:'auto',textAlign:'right'}}>
+            <span className="badge badge-success">✓ TRUSTED</span>
+          </div>
+        </div>
+        <div className="cert-body">
+          <div className="grid-3">
+            {[
+              {label:'CA Name',value:'PKI Learning Root CA'},
+              {label:'Serial Number',value:genSerial().substring(0,17)+'...'},
+              {label:'Valid From',value:'01 Jan 2025'},
+              {label:'Valid Until',value:'01 Jan 2035'},
+              {label:'Key Algorithm',value:'RSA-4096'},
+              {label:'Status',value:'ACTIVE & TRUSTED'},
+            ].map(f=>(
+              <div key={f.label} style={{padding:'10px 0',borderBottom:'1px solid rgba(255,255,255,0.04)'}}>
+                <div style={{fontSize:'11px',color:'var(--text-dim)',textTransform:'uppercase',letterSpacing:'0.5px'}}>{f.label}</div>
+                <div style={{fontSize:'13px',color:'var(--text-secondary)',marginTop:'3px',fontFamily:'monospace'}}>{f.value}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* Incoming request */}
+      <div style={{fontSize:'15px',fontWeight:'600',marginBottom:'14px'}}>📥 Incoming Certificate Requests</div>
+
+      {!csr ? (
+        <div style={{background:'rgba(255,255,255,0.02)',border:'1px dashed var(--border)',borderRadius:'10px',padding:'32px',textAlign:'center',marginBottom:'20px'}}>
+          <div style={{fontSize:'28px',marginBottom:'8px'}}>📋</div>
+          <div style={{fontSize:'14px',color:'var(--text-dim)',marginBottom:'12px'}}>No pending requests. Submit a CSR first.</div>
+          <button className="btn-secondary btn-sm" onClick={()=>onNavigate('csr')}>Go to CSR Lab →</button>
+        </div>
+      ) : (
+        <div className="card" style={{marginBottom:'20px',borderColor:'rgba(255,170,0,0.2)'}}>
+          <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:'16px'}}>
+            <div>
+              <div style={{fontSize:'12px',fontWeight:'700',color:'var(--warn)',letterSpacing:'1px'}}>REQUEST #PKI-001</div>
+              <div style={{fontSize:'18px',fontWeight:'700',marginTop:'4px'}}>{csr.domain}</div>
+            </div>
+            {!issued && !rejected && step===-1 && <span className="badge badge-warn">PENDING REVIEW</span>}
+            {issued && <span className="badge badge-success">APPROVED</span>}
+            {rejected && <span className="badge badge-error">REJECTED</span>}
+          </div>
+          <div className="grid-3" style={{marginBottom:'16px'}}>
+            {[
+              {label:'Applicant',value:csr.commonName},
+              {label:'Organization',value:csr.org},
+              {label:'Country',value:csr.country},
+              {label:'Email',value:csr.email},
+              {label:'Public Key',value:'SHA256:'+csr.publicKeyFingerprint?.substring(0,16)+'...'},
+              {label:'Submitted',value:new Date(csr.timestamp).toLocaleDateString()},
+            ].map(f=>(
+              <div key={f.label}>
+                <div style={{fontSize:'11px',color:'var(--text-dim)',textTransform:'uppercase',letterSpacing:'0.5px'}}>{f.label}</div>
+                <div style={{fontSize:'13px',color:'var(--text-secondary)',marginTop:'3px',fontFamily:f.label==='Public Key'?'monospace':'inherit',wordBreak:'break-all'}}>{f.value}</div>
+              </div>
+            ))}
+          </div>
+
+          {!issued && !rejected && step === -1 && (
+            <div style={{display:'flex',gap:'10px'}}>
+              <button className="btn-success" onClick={handleApprove}>✓ Approve Certificate</button>
+              <button className="btn-danger" onClick={()=>setRejected(true)}>✕ Reject Certificate</button>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Signing animation */}
+      {step >= 0 && !issued && (
+        <div className="card fade-in" style={{marginBottom:'20px'}}>
+          <div style={{fontSize:'14px',fontWeight:'600',color:'var(--accent)',marginBottom:'16px'}}>⟳ Certificate Signing Process</div>
+          {signingSteps.map((s,i)=>(
+            <div key={i} className="step-item">
+              <div className={`step-icon ${i<step?'success':i===step?'pending':'idle'}`}>
+                {i<step?'✓':i===step?'⟳':s.icon}
+              </div>
+              <div>
+                <div style={{fontSize:'13px',fontWeight:'600',color:i===step?'var(--accent)':i<step?'var(--success)':'var(--text-dim)'}}>{s.label}</div>
+                <div style={{fontSize:'12px',color:'var(--text-dim)'}}>{s.desc}</div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {issued && (
+        <div className="card fade-in" style={{background:'rgba(0,230,118,0.04)',borderColor:'rgba(0,230,118,0.3)',padding:'24px',textAlign:'center',marginBottom:'20px'}}>
+          <div style={{fontSize:'40px',marginBottom:'8px'}}>✅</div>
+          <div style={{fontSize:'20px',fontWeight:'700',color:'var(--success)',marginBottom:'4px'}}>Certificate Successfully Issued</div>
+          <div style={{fontSize:'13px',color:'var(--text-dim)',marginBottom:'16px'}}>The certificate has been signed by the CA and is ready to use.</div>
+          <button className="btn-primary" onClick={()=>onNavigate('certificate')}>View Certificate →</button>
+        </div>
+      )}
+
+      {rejected && (
+        <div className="card fade-in" style={{background:'rgba(255,61,113,0.04)',borderColor:'rgba(255,61,113,0.3)',padding:'24px',textAlign:'center',marginBottom:'20px'}}>
+          <div style={{fontSize:'40px',marginBottom:'8px'}}>❌</div>
+          <div style={{fontSize:'18px',fontWeight:'700',color:'var(--error)',marginBottom:'4px'}}>Certificate Request Rejected</div>
+          <div style={{fontSize:'13px',color:'var(--text-dim)',marginBottom:'16px'}}>The CA has rejected this certificate request. The applicant must resubmit with corrected information.</div>
+          <button className="btn-secondary btn-sm" onClick={()=>{setRejected(false);}}>Review Again</button>
+        </div>
+      )}
+
+      <ExplainBtn topic="ca" />
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PAGE: Certificate Viewer
+// ─────────────────────────────────────────────────────────────────────────────
+function CertificatePage({ certificate, onComplete, onNavigate }) {
+  const [expandedSection, setExpandedSection] = useState('subject');
+  const [selectedChain, setSelectedChain] = useState('server');
+  const cert = certificate || {
+    cn:'secure-demo.example', org:'Secure Labs Inc.', country:'IN',
+    email:'alice@secure-demo.example', issuer:'PKI Learning Root CA',
+    serial:genSerial(), validFrom:new Date('2026-10-13'),
+    validTo:new Date('2027-10-13'), fingerprint:genFingerprint(),
+    sigAlg:'SHA256withRSA', version:'V3',
+    keyUsage:'Digital Signature, Key Encipherment',
+    extKeyUsage:'TLS Web Server Authentication', status:'valid',
+  };
+
+  const chainNodes = {
+    root: {
+      title:'🏛️ Root CA Certificate',
+      data:[
+        {label:'Subject',value:'CN=PKI Learning Root CA'},
+        {label:'Issuer',value:'CN=PKI Learning Root CA (Self-signed)'},
+        {label:'Valid From',value:'01 Jan 2025'},
+        {label:'Valid Until',value:'01 Jan 2035'},
+        {label:'Key Usage',value:'Certificate Sign, CRL Sign'},
+        {label:'Trust Anchor',value:'YES — Pre-installed in trust store'},
+      ]
+    },
+    intermediate: {
+      title:'🔗 Intermediate CA Certificate',
+      data:[
+        {label:'Subject',value:'CN=PKI Learning CA 2026'},
+        {label:'Issuer',value:'CN=PKI Learning Root CA'},
+        {label:'Valid From',value:'01 Jan 2026'},
+        {label:'Valid Until',value:'31 Dec 2028'},
+        {label:'Key Usage',value:'Certificate Sign, CRL Sign'},
+        {label:'Signed By',value:'PKI Learning Root CA'},
+      ]
+    },
+    server: {
+      title:'📜 Server Certificate',
+      data:[
+        {label:'Subject',value:`CN=${cert.cn}`},
+        {label:'Issuer',value:cert.issuer},
+        {label:'Valid From',value:dateStr(cert.validFrom)},
+        {label:'Expires',value:dateStr(cert.validTo)},
+        {label:'Serial Number',value:cert.serial},
+        {label:'Fingerprint',value:cert.fingerprint?.substring(0,32)+'...'},
+        {label:'Algorithm',value:cert.sigAlg},
+        {label:'Key Usage',value:cert.keyUsage},
+      ]
+    }
+  };
+
+  const sections = {
+    subject: ['Common Name (CN)', cert.cn, 'Organization (O)', cert.org, 'Country (C)', cert.country, 'Email', cert.email],
+    issuer: ['Issuer CN', cert.issuer, 'Issuer O', 'PKI Learning Authority', 'Trust Level', 'Root CA'],
+    validity: ['Issued', dateStr(cert.validFrom), 'Expires', dateStr(cert.validTo), 'Duration', '365 days'],
+    details: ['Serial Number', cert.serial, 'Version', cert.version, 'Signature Algorithm', cert.sigAlg, 'Fingerprint (SHA256)', cert.fingerprint?.substring(0,32)+'...', 'Key Usage', cert.keyUsage, 'Extended Key Usage', cert.extKeyUsage],
+  };
+
+  useEffect(() => { onComplete(); }, []);
+
+  return (
+    <div className="fade-in">
+      <div className="page-header">
+        <div className="page-eyebrow">STAGE 5 • DIGITAL CERTIFICATE</div>
+        <div className="page-title">Digital Certificate Viewer</div>
+        <div className="page-subtitle">Examine the complete digital certificate — the electronic document that binds identity to a public key.</div>
+      </div>
+
+      {/* Status banner */}
+      <div style={{display:'flex',alignItems:'center',gap:'12px',padding:'14px 20px',background:'rgba(0,230,118,0.05)',border:'1px solid rgba(0,230,118,0.25)',borderRadius:'10px',marginBottom:'24px'}}>
+        <span style={{fontSize:'22px'}}>✅</span>
+        <div>
+          <div style={{fontSize:'15px',fontWeight:'700',color:'var(--success)'}}>Certificate Status: VALID</div>
+          <div style={{fontSize:'12px',color:'var(--text-dim)'}}>Issued by {cert.issuer} • Expires {dateStr(cert.validTo)}</div>
+        </div>
+        <span className="badge badge-success" style={{marginLeft:'auto'}}>X.509 v3</span>
+      </div>
+
+      <div className="grid-2" style={{marginBottom:'24px'}}>
+        {/* Certificate details */}
+        <div className="cert-card">
+          <div className="cert-header">
+            <div className="cert-seal">📜</div>
+            <div>
+              <div style={{fontWeight:'700',fontSize:'16px'}}>{cert.cn}</div>
+              <div style={{fontSize:'12px',color:'var(--text-dim)'}}>{cert.org}</div>
+            </div>
+          </div>
+          <div className="cert-body">
+            {/* Expandable sections */}
+            {Object.entries({subject:'👤 Subject',issuer:'🏛️ Issuer',validity:'📅 Validity',details:'🔍 Details'}).map(([key,label])=>(
+              <div key={key} style={{marginBottom:'4px'}}>
+                <div
+                  onClick={()=>setExpandedSection(expandedSection===key?null:key)}
+                  style={{display:'flex',justifyContent:'space-between',alignItems:'center',padding:'10px 0',cursor:'pointer',borderBottom:'1px solid rgba(255,255,255,0.05)'}}
+                >
+                  <span style={{fontSize:'13px',fontWeight:'600',color:'var(--text-primary)'}}>{label}</span>
+                  <span style={{fontSize:'12px',color:'var(--text-dim)',transition:'transform 0.2s',transform:expandedSection===key?'rotate(180deg)':'none'}}>▼</span>
+                </div>
+                {expandedSection===key && (
+                  <div className="fade-in" style={{padding:'10px 0'}}>
+                    {sections[key].reduce((acc,v,i,arr)=>{
+                      if(i%2===0) acc.push([v,arr[i+1]]);
+                      return acc;
+                    },[]).map(([l,v])=>(
+                      <div key={l} className="cert-field">
+                        <span className="cert-field-label">{l}</span>
+                        <span className="cert-field-value">{v}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Trust chain */}
+        <div>
+          <div style={{fontSize:'13px',fontWeight:'600',color:'var(--accent)',marginBottom:'14px'}}>🔗 Trust Chain</div>
+          <div style={{marginBottom:'16px'}}>
+            {[{id:'root',label:'🏛️ Root CA',sub:'PKI Learning Root CA'},{id:'intermediate',label:'🔗 Intermediate CA',sub:'PKI Learning CA 2026'},{id:'server',label:'📜 Server Certificate',sub:cert.cn}].map((n,i,arr)=>(
+              <React.Fragment key={n.id}>
+                <div className={`trust-node ${selectedChain===n.id?'selected':''}`} onClick={()=>setSelectedChain(n.id)}>
+                  <div style={{fontSize:'13px',fontWeight:'600',color:'var(--text-primary)'}}>{n.label}</div>
+                  <div style={{fontSize:'11px',color:'var(--text-dim)',marginTop:'2px',fontFamily:'monospace'}}>{n.sub}</div>
+                </div>
+                {i<arr.length-1 && <div className="trust-connector" />}
+              </React.Fragment>
+            ))}
+          </div>
+
+          {selectedChain && (
+            <div className="card slide-down" style={{borderColor:'rgba(0,180,255,0.25)'}}>
+              <div style={{fontSize:'13px',fontWeight:'600',color:'var(--accent)',marginBottom:'10px'}}>{chainNodes[selectedChain].title}</div>
+              {chainNodes[selectedChain].data.map(({label,value})=>(
+                <div key={label} className="cert-field">
+                  <span className="cert-field-label">{label}</span>
+                  <span className="cert-field-value">{value}</span>
+                </div>
+              ))}
+            </div>
+          )}
+          <ExplainBtn topic="trustChain" />
+        </div>
+      </div>
+
+      <button className="btn-primary" onClick={()=>onNavigate('validation')}>Continue to Validation Lab →</button>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PAGE: Validation Lab
+// ─────────────────────────────────────────────────────────────────────────────
+function ValidationPage({ certificate, onComplete, onNavigate }) {
+  const [running, setRunning] = useState(false);
+  const [checks, setChecks] = useState([]);
+  const [result, setResult] = useState(null);
+  const [failureMode, setFailureMode] = useState(null);
+  const [failureModal, setFailureModal] = useState(false);
+
+  const validChecks = [
+    {id:'format',title:'Certificate Format',detail:'X.509 v3 format verified successfully',pass:true},
+    {id:'issuer',title:'Issuer Verification',detail:'Issuer: PKI Learning Root CA — Trusted CA found in trust store',pass:true},
+    {id:'expiry',title:'Expiration Check',detail:`Certificate valid until ${certificate?.validTo?dateStr(certificate.validTo):'13 Oct 2027'} — Within validity period`,pass:true},
+    {id:'signature',title:'Signature Verification',detail:'CA digital signature verified using RSA-2048 public key',pass:true},
+    {id:'domain',title:'Domain / Identity Check',detail:`CN=${certificate?.cn||'secure-demo.example'} matches expected identity`,pass:true},
+    {id:'chain',title:'Trust Chain Verification',detail:'Chain: Server → Intermediate CA → Root CA — All valid',pass:true},
+  ];
+
+  const failureScenarios = {
+    expired: {
+      label:'Expired Certificate',
+      checks:[
+        {id:'format',title:'Certificate Format',detail:'Format check passed',pass:true},
+        {id:'issuer',title:'Issuer Verification',detail:'Issuer trusted',pass:true},
+        {id:'expiry',title:'Expiration Check',detail:'Certificate expired on 01 Jan 2025. Current date is beyond expiry.',pass:false},
+        {id:'signature',title:'Signature Verification',detail:'Skipped — certificate is already invalid',pass:null},
+        {id:'domain',title:'Domain / Identity Check',detail:'Skipped',pass:null},
+        {id:'chain',title:'Trust Chain Verification',detail:'Skipped',pass:null},
+      ],
+      reason:'Certificate Expired',
+      explain:'The certificate\'s validity period has ended. PKI requires certificates to have an expiry date so compromised or outdated certificates are automatically rejected.',
+      protection:'Expired certificates are rejected to prevent continued use of potentially compromised certificates. Renewal ensures certificates use current security parameters.'
+    },
+    unknownCA: {
+      label:'Untrusted Certificate Authority',
+      checks:[
+        {id:'format',title:'Certificate Format',detail:'Format check passed',pass:true},
+        {id:'issuer',title:'Issuer Verification',detail:'Issuer "Unknown CA Corp" is NOT in the trusted CA store',pass:false},
+        {id:'expiry',title:'Expiration Check',detail:'Skipped — Issuer not trusted',pass:null},
+        {id:'signature',title:'Signature Verification',detail:'Cannot verify without trusted CA',pass:null},
+        {id:'domain',title:'Domain / Identity Check',detail:'Skipped',pass:null},
+        {id:'chain',title:'Trust Chain Verification',detail:'Chain broken — Root CA not trusted',pass:null},
+      ],
+      reason:'Untrusted Certificate Authority',
+      explain:'The certificate was issued by a CA that is not in the trusted CA store. This could indicate a self-signed certificate or a compromised CA.',
+      protection:'By only trusting pre-approved CAs, PKI prevents attackers from creating fake certificates using their own unauthorized CA.'
+    },
+    domainMismatch: {
+      label:'Domain Mismatch',
+      checks:[
+        {id:'format',title:'Certificate Format',detail:'Format check passed',pass:true},
+        {id:'issuer',title:'Issuer Verification',detail:'Issuer trusted',pass:true},
+        {id:'expiry',title:'Expiration Check',detail:'Within validity period',pass:true},
+        {id:'signature',title:'Signature Verification',detail:'Signature valid',pass:true},
+        {id:'domain',title:'Domain / Identity Check',detail:'Expected: secure-demo.example. Certificate CN: evil-phishing.example — MISMATCH!',pass:false},
+        {id:'chain',title:'Trust Chain Verification',detail:'Skipped — identity mismatch',pass:null},
+      ],
+      reason:'Domain Name Mismatch',
+      explain:'The domain in the certificate does not match the domain being accessed. This is a common indicator of a man-in-the-middle attack.',
+      protection:'Domain verification ensures that even if an attacker has a valid certificate, it cannot be used for a different domain than the one it was issued for.'
+    },
+    invalidSig: {
+      label:'Invalid Digital Signature',
+      checks:[
+        {id:'format',title:'Certificate Format',detail:'Format check passed',pass:true},
+        {id:'issuer',title:'Issuer Verification',detail:'Issuer CA found in trust store',pass:true},
+        {id:'expiry',title:'Expiration Check',detail:'Within validity period',pass:true},
+        {id:'signature',title:'Signature Verification',detail:'Signature verification FAILED — Certificate data may have been tampered with',pass:false},
+        {id:'domain',title:'Domain / Identity Check',detail:'Skipped — signature invalid',pass:null},
+        {id:'chain',title:'Trust Chain Verification',detail:'Skipped',pass:null},
+      ],
+      reason:'Invalid Digital Signature',
+      explain:'The CA\'s digital signature on the certificate does not verify correctly. This means the certificate was tampered with after issuance.',
+      protection:'The CA signs each certificate with its private key. Any modification to the certificate data causes signature verification to fail, detecting tampering.'
+    },
+    revoked: {
+      label:'Revoked Certificate',
+      checks:[
+        {id:'format',title:'Certificate Format',detail:'Format check passed',pass:true},
+        {id:'issuer',title:'Issuer Verification',detail:'Issuer trusted',pass:true},
+        {id:'expiry',title:'Expiration Check',detail:'Within validity period',pass:true},
+        {id:'signature',title:'Signature Verification',detail:'Signature valid',pass:true},
+        {id:'domain',title:'Domain / Identity Check',detail:'Domain matches',pass:true},
+        {id:'chain',title:'Trust Chain Verification',detail:'Certificate is on the Certificate Revocation List (CRL) — REVOKED!',pass:false},
+      ],
+      reason:'Certificate Revoked',
+      explain:'The certificate has been revoked by the CA and appears on the Certificate Revocation List (CRL). This could be because the private key was compromised.',
+      protection:'CRLs and OCSP allow CAs to invalidate certificates before their natural expiry date, preventing use of compromised certificates.'
+    },
+  };
+
+  const runValidation = async (scenario=null) => {
+    setRunning(true);
+    setChecks([]);
+    setResult(null);
+    setFailureMode(scenario);
+    const checkList = scenario ? failureScenarios[scenario].checks : validChecks;
+    for (let i=0; i<checkList.length; i++) {
+      setChecks(prev=>[...prev,{...checkList[i],state:'running'}]);
+      await sleep(600);
+      setChecks(prev=>prev.map((c,idx)=>idx===i?{...c,state:c.pass===null?'idle':c.pass?'pass':'fail'}:c));
+      if(checkList[i].pass===false) {
+        await sleep(300);
+        break;
+      }
+    }
+    await sleep(400);
+    setRunning(false);
+    setResult(scenario ? 'fail' : 'pass');
+    if (!scenario) { onComplete(); }
+  };
+
+  return (
+    <div className="fade-in">
+      <div className="page-header">
+        <div className="page-eyebrow">STAGE 6 • VALIDATION</div>
+        <div className="page-title">Certificate Validation Lab</div>
+        <div className="page-subtitle">Run real-time certificate validation checks. Test both valid and invalid certificate scenarios.</div>
+      </div>
+
+      <div className="grid-2" style={{marginBottom:'24px'}}>
+        {/* Controls */}
+        <div>
+          <div className="card" style={{marginBottom:'16px'}}>
+            <div style={{fontSize:'13px',fontWeight:'600',color:'var(--accent)',marginBottom:'12px'}}>🎯 Select Validation Scenario</div>
+            <div style={{display:'flex',flexDirection:'column',gap:'8px',marginBottom:'16px'}}>
+              <div style={{padding:'10px 14px',background:'rgba(0,230,118,0.06)',border:'1px solid rgba(0,230,118,0.2)',borderRadius:'8px',cursor:'pointer'}} onClick={()=>{}}>
+                <div style={{fontSize:'13px',fontWeight:'600',color:'var(--success)'}}>✓ Valid Certificate</div>
+                <div style={{fontSize:'11px',color:'var(--text-dim)',marginTop:'2px'}}>{certificate?.cn || 'secure-demo.example'} • Issued by PKI Learning Root CA</div>
+              </div>
+            </div>
+            <div style={{display:'flex',gap:'10px',flexWrap:'wrap'}}>
+              <button className="btn-primary" onClick={()=>runValidation(null)} disabled={running}>
+                {running && !failureMode ? '⟳ Validating...' : '▶ Validate Certificate'}
+              </button>
+            </div>
+          </div>
+
+          <div className="card">
+            <div style={{fontSize:'13px',fontWeight:'600',color:'var(--warn)',marginBottom:'12px'}}>⚠️ Simulate Invalid Certificate</div>
+            <div style={{display:'flex',flexDirection:'column',gap:'6px'}}>
+              {Object.entries(failureScenarios).map(([key,s])=>(
+                <button key={key} className="btn-secondary btn-sm" style={{textAlign:'left',borderColor:'rgba(255,170,0,0.25)'}} onClick={()=>runValidation(key)} disabled={running}>
+                  ✕ {s.label}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {/* Checks */}
+        <div>
+          <div style={{fontSize:'13px',fontWeight:'600',color:'var(--accent)',marginBottom:'12px'}}>Validation Checks</div>
+          {checks.length === 0 && (
+            <div style={{padding:'40px',textAlign:'center',color:'var(--text-dim)',fontSize:'13px',background:'rgba(255,255,255,0.02)',border:'1px dashed var(--border)',borderRadius:'8px'}}>
+              Click "Validate Certificate" to start the validation process
+            </div>
+          )}
+          {checks.map((c,i)=>(
+            <div key={c.id+i} className={`check-item ${c.state}`}>
+              <div className={`check-icon ${c.state}`}>
+                {c.state==='running'?'⟳':c.state==='pass'?'✓':c.state==='fail'?'✕':'○'}
+              </div>
+              <div className="check-text">
+                <div className="check-title">{i+1}. {c.title}</div>
+                {(c.state==='pass'||c.state==='fail') && <div className="check-detail">{c.detail}</div>}
+              </div>
+              {c.state==='pass' && <span className="badge badge-success">PASS</span>}
+              {c.state==='fail' && <span className="badge badge-error">FAIL</span>}
+            </div>
+          ))}
+
+          {result === 'pass' && (
+            <div className="fade-in" style={{padding:'20px',background:'rgba(0,230,118,0.06)',border:'2px solid rgba(0,230,118,0.3)',borderRadius:'10px',textAlign:'center',marginTop:'12px'}}>
+              <div style={{fontSize:'28px',marginBottom:'6px'}}>✅</div>
+              <div style={{fontSize:'18px',fontWeight:'800',color:'var(--success)'}}>CERTIFICATE VALID</div>
+              <div style={{fontSize:'13px',color:'var(--text-dim)',marginTop:'4px',marginBottom:'12px'}}>Trust Score: 100%</div>
+              <div style={{display:'flex',gap:'8px',justifyContent:'center',flexWrap:'wrap'}}>
+                <span className="badge badge-success">Identity ✓</span>
+                <span className="badge badge-success">Issuer ✓</span>
+                <span className="badge badge-success">Expiry ✓</span>
+                <span className="badge badge-success">Signature ✓</span>
+                <span className="badge badge-success">Domain ✓</span>
+                <span className="badge badge-success">Chain ✓</span>
+              </div>
+            </div>
+          )}
+
+          {result === 'fail' && failureMode && (
+            <div className="fade-in" style={{padding:'20px',background:'rgba(255,61,113,0.06)',border:'2px solid rgba(255,61,113,0.3)',borderRadius:'10px',marginTop:'12px'}}>
+              <div style={{fontSize:'22px',marginBottom:'6px'}}>❌</div>
+              <div style={{fontSize:'16px',fontWeight:'800',color:'var(--error)'}}>CERTIFICATE VALIDATION FAILED</div>
+              <div style={{fontSize:'13px',color:'var(--warn)',margin:'8px 0'}}>Reason: {failureScenarios[failureMode]?.reason}</div>
+              <div style={{fontSize:'12px',color:'var(--text-dim)',marginBottom:'8px',lineHeight:'1.6'}}>
+                <strong style={{color:'var(--text-secondary)'}}>Why did this happen?</strong><br/>
+                {failureScenarios[failureMode]?.explain}
+              </div>
+              <div style={{fontSize:'12px',color:'var(--text-dim)',lineHeight:'1.6'}}>
+                <strong style={{color:'var(--success)'}}>How PKI protects against this:</strong><br/>
+                {failureScenarios[failureMode]?.protection}
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+
+      <ExplainBtn topic="validation" />
+      <br/><br/>
+      <button className="btn-primary" onClick={()=>onNavigate('auth')}>Continue to Authentication →</button>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PAGE: Authentication
+// ─────────────────────────────────────────────────────────────────────────────
+function AuthPage({ certificate, onComplete, onNavigate }) {
+  const [step, setStep] = useState(-1);
+  const [done, setDone] = useState(false);
+  const [explanations, setExplanations] = useState({});
+
+  const authSteps = [
+    {id:'cert',from:'client',to:'server',label:'Certificate Presented',desc:'Client sends its digital certificate to the server',internal:'Client retrieves certificate from local store and transmits to server',clientMsg:'→ Certificate',serverMsg:''},
+    {id:'challenge',from:'server',to:'client',label:'Challenge Issued',desc:'Server generates a random challenge nonce',internal:'Server generates random 256-bit nonce: challenge = crypto.randomBytes(32)',clientMsg:'',serverMsg:'← Challenge'},
+    {id:'signed',from:'client',to:'server',label:'Signed Response',desc:'Client signs the challenge with its private key',internal:'signedResponse = RSA_SIGN(challenge, clientPrivateKey)',clientMsg:'→ Signed Response',serverMsg:''},
+    {id:'verify',from:'server',to:'client',label:'Verification',desc:'Server verifies the signature using the client\'s public key',internal:'valid = RSA_VERIFY(signedResponse, clientPublicKey)',clientMsg:'',serverMsg:'← Verified ✓'},
+  ];
+
+  const run = async () => {
+    setStep(-1);
+    setDone(false);
+    for (let i=0; i<authSteps.length; i++) {
+      setStep(i);
+      await sleep(1200);
+    }
+    await sleep(400);
+    setDone(true);
+    onComplete();
+  };
+
+  return (
+    <div className="fade-in">
+      <div className="page-header">
+        <div className="page-eyebrow">STAGE 7 • IDENTITY</div>
+        <div className="page-title">Identity Authentication</div>
+        <div className="page-subtitle">Watch how PKI enables certificate-based authentication between a client and server through a challenge-response protocol.</div>
+      </div>
+
+      {/* Auth diagram */}
+      <div className="card" style={{marginBottom:'24px'}}>
+        <div className="auth-flow" style={{gap:'24px'}}>
+          {/* Client */}
+          <div className="auth-box">
+            <div className="auth-box-icon">💻</div>
+            <div className="auth-box-title">CLIENT</div>
+            <div style={{fontSize:'11px',color:'var(--text-dim)',marginTop:'4px'}}>{certificate?.cn||'secure-demo.example'}</div>
+            {step>=0 && <div style={{marginTop:'8px'}}><span className="badge badge-info" style={{fontSize:'10px'}}>{authSteps[Math.min(step,3)].clientMsg||'Waiting...'}</span></div>}
+          </div>
+
+          {/* Channel */}
+          <div className="auth-channel" style={{flex:1}}>
+            {authSteps.map((s,i)=>(
+              <div key={s.id} className={`auth-msg ${step===i?'active':''}`} style={{opacity:step>=i?1:0.2,transition:'all 0.4s'}}>
+                {s.from==='client'?'CLIENT → SERVER':'SERVER → CLIENT'}: {s.label}
+              </div>
+            ))}
+          </div>
+
+          {/* Server */}
+          <div className="auth-box">
+            <div className="auth-box-icon">🖥️</div>
+            <div className="auth-box-title">SERVER</div>
+            <div style={{fontSize:'11px',color:'var(--text-dim)',marginTop:'4px'}}>secure-server.example</div>
+            {step>=0 && <div style={{marginTop:'8px'}}><span className="badge badge-info" style={{fontSize:'10px'}}>{authSteps[Math.min(step,3)].serverMsg||'Processing...'}</span></div>}
+          </div>
+        </div>
+      </div>
+
+      {/* Step details */}
+      {step >= 0 && (
+        <div className="card" style={{marginBottom:'24px'}}>
+          <div style={{fontSize:'13px',fontWeight:'600',color:'var(--accent)',marginBottom:'14px'}}>Step {step+1}: {authSteps[Math.min(step,3)].label}</div>
+          {authSteps.map((s,i)=>(
+            <div key={s.id} className="step-item">
+              <div className={`step-icon ${i<step?'success':i===step?'pending':'idle'}`}>
+                {i<step?'✓':i===step?'⟳':`${i+1}`}
+              </div>
+              <div style={{flex:1}}>
+                <div style={{fontSize:'13px',fontWeight:'600',color:i===step?'var(--accent)':i<step?'var(--success)':'var(--text-dim)'}}>{s.label}</div>
+                <div style={{fontSize:'12px',color:'var(--text-dim)'}}>{s.desc}</div>
+                {i===step && (
+                  <div style={{marginTop:'6px',padding:'6px 10px',background:'rgba(0,0,0,0.3)',borderRadius:'4px',fontFamily:'monospace',fontSize:'11px',color:'var(--accent)'}}>
+                    {s.internal}
+                  </div>
+                )}
+              </div>
+              {i<=step && (
+                <button className="explain-btn" onClick={()=>setExplanations(p=>({...p,[s.id]:!p[s.id]}))}>
+                  ❓ Explain
+                </button>
+              )}
+            </div>
+          ))}
+          {explanations[authSteps[Math.min(step,3)]?.id] && (
+            <div className="explain-panel">
+              {authSteps[Math.min(step,3)]?.id==='cert' && 'The client presents its digital certificate so the server knows who it is talking to. The certificate contains the client\'s public key and is signed by a trusted CA.'}
+              {authSteps[Math.min(step,3)]?.id==='challenge' && 'The server sends a random challenge (nonce) that the client must sign. This prevents replay attacks — old signed messages cannot be reused.'}
+              {authSteps[Math.min(step,3)]?.id==='signed' && 'The client uses its private key to create a digital signature of the challenge. Only the true private key holder can produce a valid signature.'}
+              {authSteps[Math.min(step,3)]?.id==='verify' && 'The server uses the client\'s public key (from the certificate) to verify the signature. If valid, the client has proven they own the private key matching the certificate.'}
+            </div>
+          )}
+        </div>
+      )}
+
+      {done && (
+        <div className="card fade-in" style={{marginBottom:'20px',background:'rgba(0,230,118,0.04)',borderColor:'rgba(0,230,118,0.3)',padding:'24px',textAlign:'center'}}>
+          <div style={{fontSize:'32px',marginBottom:'8px'}}>🛡️</div>
+          <div style={{fontSize:'20px',fontWeight:'800',color:'var(--success)'}}>AUTHENTICATION VERIFIED</div>
+          <div style={{fontSize:'13px',color:'var(--text-dim)',marginTop:'6px',marginBottom:'16px'}}>
+            Identity of {certificate?.cn||'secure-demo.example'} has been cryptographically verified.
+          </div>
+          <div style={{display:'flex',gap:'8px',justifyContent:'center',flexWrap:'wrap'}}>
+            <span className="badge badge-success">Certificate ✓</span>
+            <span className="badge badge-success">Challenge ✓</span>
+            <span className="badge badge-success">Signature ✓</span>
+            <span className="badge badge-success">Identity ✓</span>
+          </div>
+        </div>
+      )}
+
+      <div style={{display:'flex',gap:'12px',flexWrap:'wrap'}}>
+        <button className="btn-primary" onClick={run} disabled={step>=0&&!done}>
+          {step>=0&&!done ? '⟳ Authenticating...' : done ? '↺ Run Again' : '▶ Start Authentication'}
+        </button>
+        {done && <button className="btn-secondary" onClick={()=>onNavigate('communication')}>Continue to Secure Comms →</button>}
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PAGE: Secure Communication
+// ─────────────────────────────────────────────────────────────────────────────
+function CommunicationPage({ certificate, onComplete, onNavigate }) {
+  const [step, setStep] = useState(-1);
+  const [message, setMessage] = useState('Hello Secure World!');
+  const [sending, setSending] = useState(false);
+  const [sent, setSent] = useState(false);
+  const [sessionEstablished, setSessionEstablished] = useState(false);
+
+  const handshakeSteps = [
+    {label:'Certificate Request', from:'client', desc:'Client requests server\'s certificate to verify identity'},
+    {label:'Certificate Presented', from:'server', desc:'Server presents its digital certificate'},
+    {label:'Certificate Validated', from:'client', desc:'Client validates certificate against trusted CAs'},
+    {label:'Secure Session Established', from:'both', desc:'Session keys derived — encrypted channel ready'},
+    {label:'Encrypted Data Exchange', from:'both', desc:'All data is now encrypted and authenticated'},
+  ];
+
+  const runHandshake = async () => {
+    for (let i=0; i<handshakeSteps.length; i++) {
+      setStep(i);
+      await sleep(800);
+    }
+    setSessionEstablished(true);
+    onComplete();
+  };
+
+  const sendMsg = async () => {
+    setSending(true);
+    await sleep(2000);
+    setSending(false);
+    setSent(true);
+  };
+
+  const encryptFake = (msg) => `[ENCRYPTED] ${btoa(msg).substring(0,20)}...${randomHex(8).toUpperCase()}`;
+
+  return (
+    <div className="fade-in">
+      <div className="page-header">
+        <div className="page-eyebrow">STAGE 8 • SECURE CHANNEL</div>
+        <div className="page-title">Secure Communication</div>
+        <div className="page-subtitle">Simulate a TLS-like handshake and encrypted data exchange using PKI certificates.</div>
+      </div>
+
+      {/* Client-Server visual */}
+      <div className="card" style={{marginBottom:'24px'}}>
+        <div style={{display:'grid',gridTemplateColumns:'1fr auto 1fr',gap:'16px',alignItems:'center'}}>
+          <div style={{textAlign:'center',padding:'20px',background:'rgba(0,180,255,0.05)',border:'1px solid rgba(0,180,255,0.15)',borderRadius:'12px'}}>
+            <div style={{fontSize:'32px',marginBottom:'8px'}}>💻</div>
+            <div style={{fontWeight:'700',fontSize:'16px'}}>CLIENT</div>
+            <div style={{fontSize:'11px',color:'var(--text-dim)',marginTop:'4px'}}>alice@secure-demo.example</div>
+            {sessionEstablished && <div style={{marginTop:'8px'}}><span className="badge badge-success">SECURED 🔒</span></div>}
+          </div>
+
+          <div style={{display:'flex',flexDirection:'column',alignItems:'center',gap:'6px',minWidth:'140px'}}>
+            {handshakeSteps.map((s,i)=>(
+              <div key={i} style={{
+                fontSize:'10px',color:i<step?'var(--success)':i===step?'var(--accent)':'var(--text-dim)',
+                background:i===step?'rgba(0,180,255,0.08)':'transparent',
+                padding:'3px 8px',borderRadius:'4px',textAlign:'center',transition:'all 0.3s',
+                borderLeft:i<step?'2px solid var(--success)':i===step?'2px solid var(--accent)':'2px solid transparent',
+                paddingLeft:'8px'
+              }}>{s.label}</div>
+            ))}
+            {sessionEstablished && (
+              <div style={{marginTop:'8px',padding:'6px 12px',background:'rgba(0,230,118,0.1)',border:'1px solid rgba(0,230,118,0.3)',borderRadius:'6px',fontSize:'11px',fontWeight:'700',color:'var(--success)'}}>
+                🔒 ENCRYPTED
+              </div>
+            )}
+          </div>
+
+          <div style={{textAlign:'center',padding:'20px',background:'rgba(0,180,255,0.05)',border:'1px solid rgba(0,180,255,0.15)',borderRadius:'12px'}}>
+            <div style={{fontSize:'32px',marginBottom:'8px'}}>🖥️</div>
+            <div style={{fontWeight:'700',fontSize:'16px'}}>SERVER</div>
+            <div style={{fontSize:'11px',color:'var(--text-dim)',marginTop:'4px'}}>{certificate?.cn||'secure-demo.example'}</div>
+            {sessionEstablished && <div style={{marginTop:'8px'}}><span className="badge badge-success">VERIFIED ✓</span></div>}
+          </div>
+        </div>
+      </div>
+
+      {/* Handshake button */}
+      {!sessionEstablished && (
+        <div style={{textAlign:'center',marginBottom:'24px'}}>
+          <button className="btn-primary" onClick={runHandshake} disabled={step>=0&&!sessionEstablished}>
+            {step>=0&&!sessionEstablished ? '⟳ Establishing Secure Session...' : '▶ Start TLS Handshake'}
+          </button>
+        </div>
+      )}
+
+      {sessionEstablished && (
+        <>
+          {/* Secure message */}
+          <div className="card" style={{marginBottom:'24px'}}>
+            <div style={{fontSize:'14px',fontWeight:'600',color:'var(--success)',marginBottom:'16px'}}>🔒 Secure Session Established — Send Encrypted Message</div>
+            <div className="form-group">
+              <label className="form-label">MESSAGE TO SEND</label>
+              <input className="form-input" value={message} onChange={e=>setMessage(e.target.value)} placeholder="Enter a message..." />
+            </div>
+            <button className="btn-primary" onClick={sendMsg} disabled={sending}>
+              {sending ? '⟳ Encrypting & Sending...' : '📤 Send Secure Message'}
+            </button>
+
+            {(sending || sent) && (
+              <div style={{marginTop:'20px'}}>
+                {[
+                  {label:'Original Message',value:message,color:'var(--text-primary)',show:true},
+                  {label:'Protected Message',value:sending?'Encrypting...':encryptFake(message),color:'var(--warn)',show:true},
+                  {label:'Secure Transmission',value:'🔒 Transmitted over encrypted channel',color:'var(--accent)',show:!sending},
+                  {label:'Server Receives',value:sending?'...':'✅ Message received and decrypted',color:'var(--success)',show:!sending},
+                  {label:'Verified Message',value:sending?'...':message,color:'var(--success)',show:!sending},
+                ].filter(s=>s.show).map((s,i)=>(
+                  <div key={i} className="fade-in" style={{display:'flex',gap:'12px',alignItems:'flex-start',padding:'8px 0',borderBottom:'1px solid rgba(255,255,255,0.04)'}}>
+                    <div style={{fontSize:'12px',color:'var(--text-dim)',width:'160px',flexShrink:0}}>{s.label}</div>
+                    <div style={{fontSize:'12px',color:s.color,fontFamily:'monospace',wordBreak:'break-all'}}>{s.value}</div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <button className="btn-secondary" onClick={()=>onNavigate('management')}>Continue to Certificate Management →</button>
+        </>
+      )}
+
+      <div className="info-panel" style={{marginTop:'20px'}}>
+        ⚠️ This is a simplified educational representation of secure communication. Real TLS uses asymmetric cryptography to establish a symmetric session key. All values shown are simulated for learning purposes.
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PAGE: Certificate Management
+// ─────────────────────────────────────────────────────────────────────────────
+function ManagementPage({ certificates, onRevoke, onComplete, onNavigate }) {
+  const [filter, setFilter] = useState('all');
+  const [revokeModal, setRevokeModal] = useState(null);
+  const [viewModal, setViewModal] = useState(null);
+
+  const filtered = filter==='all' ? certificates : certificates.filter(c=>c.status===filter);
+  useEffect(() => { onComplete(); }, []);
+
+  const statusBadge = (s) => {
+    if(s==='valid') return <span className="badge badge-success">VALID</span>;
+    if(s==='expired') return <span className="badge badge-error">EXPIRED</span>;
+    if(s==='revoked') return <span className="badge badge-error">REVOKED</span>;
+    if(s==='pending') return <span className="badge badge-warn">PENDING</span>;
+    return <span className="badge badge-info">{s}</span>;
+  };
+
+  return (
+    <div className="fade-in">
+      <div className="page-header">
+        <div className="page-eyebrow">STAGE 9 • MANAGEMENT</div>
+        <div className="page-title">Certificate Management</div>
+        <div className="page-subtitle">View, validate, revoke, and manage all certificates in the PKI system.</div>
+      </div>
+
+      {/* Stats row */}
+      <div className="grid-4" style={{marginBottom:'24px'}}>
+        {[
+          {label:'Total',value:certificates.length,color:'var(--accent)'},
+          {label:'Valid',value:certificates.filter(c=>c.status==='valid').length,color:'var(--success)'},
+          {label:'Expired',value:certificates.filter(c=>c.status==='expired').length,color:'var(--error)'},
+          {label:'Revoked',value:certificates.filter(c=>c.status==='revoked').length,color:'var(--warn)'},
+        ].map(s=>(
+          <div key={s.label} className="stat-card" style={{textAlign:'center'}}>
+            <div style={{fontSize:'28px',fontWeight:'800',color:s.color}}>{s.value}</div>
+            <div style={{fontSize:'12px',color:'var(--text-dim)'}}>{s.label} Certificates</div>
+          </div>
+        ))}
+      </div>
+
+      {/* Filters */}
+      <div style={{display:'flex',gap:'8px',marginBottom:'16px',flexWrap:'wrap'}}>
+        {['all','valid','expired','revoked','pending'].map(f=>(
+          <button key={f} className={filter===f?'btn-primary btn-sm':'btn-secondary btn-sm'} onClick={()=>setFilter(f)} style={{textTransform:'capitalize'}}>
+            {f}
+          </button>
+        ))}
+      </div>
+
+      {/* Table */}
+      <div className="card" style={{overflowX:'auto'}}>
+        <table className="data-table">
+          <thead>
+            <tr>
+              <th>Certificate</th><th>Issuer</th><th>Status</th><th>Valid From</th><th>Expires</th><th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {filtered.map(c=>(
+              <tr key={c.id}>
+                <td>
+                  <div style={{fontWeight:'600',color:'var(--text-primary)',fontSize:'13px'}}>{c.cn}</div>
+                  <div style={{fontSize:'11px',color:'var(--text-dim)'}}>{c.org}</div>
+                </td>
+                <td>{c.issuer}</td>
+                <td>{statusBadge(c.status)}</td>
+                <td style={{fontSize:'12px'}}>{c.validFrom?dateStr(c.validFrom):'—'}</td>
+                <td style={{fontSize:'12px'}}>{c.validTo?dateStr(c.validTo):'—'}</td>
+                <td>
+                  <div style={{display:'flex',gap:'6px',flexWrap:'wrap'}}>
+                    <button className="btn-icon" title="View" onClick={()=>setViewModal(c)}>👁️</button>
+                    <button className="btn-icon" title="Validate" onClick={()=>onNavigate('validation')}>✅</button>
+                    {c.status==='valid' && (
+                      <button className="btn-icon" title="Revoke" style={{color:'var(--error)'}} onClick={()=>setRevokeModal(c)}>🚫</button>
+                    )}
+                    {c.status==='expired' && (
+                      <button className="btn-icon" title="Renew" style={{color:'var(--success)'}} onClick={()=>alert('Certificate renewal initiated (simulation).')}>🔄</button>
+                    )}
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      {revokeModal && (
+        <Modal
+          title="🚫 Revoke Certificate"
+          onClose={()=>setRevokeModal(null)}
+          actions={
+            <>
+              <button className="btn-secondary btn-sm" onClick={()=>setRevokeModal(null)}>Cancel</button>
+              <button className="btn-danger btn-sm" onClick={()=>{onRevoke(revokeModal.id);setRevokeModal(null);}}>Revoke Certificate</button>
+            </>
+          }
+        >
+          <p>Are you sure you want to revoke the certificate for <strong style={{color:'var(--accent)'}}>{revokeModal.cn}</strong>?</p>
+          <p style={{marginTop:'8px'}}>This action will immediately invalidate the certificate and add it to the Certificate Revocation List (CRL). This cannot be undone.</p>
+        </Modal>
+      )}
+
+      {viewModal && (
+        <Modal
+          title={`📜 Certificate: ${viewModal.cn}`}
+          onClose={()=>setViewModal(null)}
+          actions={<button className="btn-secondary btn-sm" onClick={()=>setViewModal(null)}>Close</button>}
+        >
+          {[
+            {l:'Common Name',v:viewModal.cn},{l:'Organization',v:viewModal.org},
+            {l:'Issuer',v:viewModal.issuer},{l:'Status',v:viewModal.status.toUpperCase()},
+            {l:'Serial',v:viewModal.serial},{l:'Valid From',v:viewModal.validFrom?dateStr(viewModal.validFrom):'—'},
+            {l:'Expires',v:viewModal.validTo?dateStr(viewModal.validTo):'—'},
+            {l:'Fingerprint',v:viewModal.fingerprint?.substring(0,32)+'...'},
+          ].map(f=>(
+            <div key={f.l} style={{display:'flex',justifyContent:'space-between',padding:'6px 0',borderBottom:'1px solid rgba(255,255,255,0.05)'}}>
+              <span style={{fontSize:'12px',color:'var(--text-dim)'}}>{f.l}</span>
+              <span style={{fontSize:'12px',color:'var(--text-secondary)',fontFamily:'monospace',maxWidth:'240px',textAlign:'right',wordBreak:'break-all'}}>{f.v}</span>
+            </div>
+          ))}
+        </Modal>
+      )}
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PAGE: Revocation
+// ─────────────────────────────────────────────────────────────────────────────
+function RevocationPage({ revocationStatus, onRevoke, onComplete, onNavigate }) {
+  const [step, setStep] = useState(-1);
+  const [reason, setReason] = useState('keyCompromise');
+  const [modal, setModal] = useState(false);
+
+  const reasons = {
+    keyCompromise:'Private Key Compromised',
+    incorrectIssuance:'Certificate Issued Incorrectly',
+    orgChange:'Organization Changes',
+    domainChange:'Domain Ownership Changes',
+    securityIncident:'Security Incident',
+  };
+
+  const revokeSteps = [
+    {label:'Certificate',icon:'📜',desc:'Currently valid certificate',state:revocationStatus==='revoked'?'done':'idle'},
+    {label:'Revocation Request',icon:'📤',desc:'Request submitted to CA',state:step>=1?'done':step===0?'active':'idle'},
+    {label:'CA Processing',icon:'🏛️',desc:'CA validates and processes request',state:step>=2?'done':step===1?'active':'idle'},
+    {label:'Added to CRL',icon:'📋',desc:'Certificate added to Certificate Revocation List',state:step>=3?'done':step===2?'active':'idle'},
+    {label:'Status: REVOKED',icon:'🚫',desc:'Certificate is now invalid',state:revocationStatus==='revoked'||step>=3?'done':'idle'},
+  ];
+
+  const handleRevoke = async () => {
+    setModal(false);
+    for (let i=0; i<4; i++) {
+      setStep(i);
+      await sleep(700);
+    }
+    onRevoke();
+    onComplete();
+    setStep(-1);
+  };
+
+  return (
+    <div className="fade-in">
+      <div className="page-header">
+        <div className="page-eyebrow">STAGE 10 • REVOCATION</div>
+        <div className="page-title">Certificate Revocation</div>
+        <div className="page-subtitle">Understand when and why certificates are revoked, and how the Certificate Revocation List (CRL) works.</div>
+      </div>
+
+      {/* Why revoke */}
+      <div className="card" style={{marginBottom:'24px'}}>
+        <div style={{fontSize:'14px',fontWeight:'600',marginBottom:'16px',color:'var(--accent)'}}>⚠️ Why Certificates May Be Revoked</div>
+        <div className="grid-3">
+          {[
+            {icon:'🔑',title:'Private Key Compromised',desc:'If the private key is stolen or leaked, the certificate must be immediately revoked.'},
+            {icon:'❌',title:'Incorrect Issuance',desc:'If the CA issued the certificate with incorrect information or without proper verification.'},
+            {icon:'🏢',title:'Organization Changes',desc:'Company name change, merger, dissolution, or domain transfer requires new certificates.'},
+            {icon:'🌐',title:'Domain Ownership',desc:'If domain ownership changes hands, old certificates must be revoked.'},
+            {icon:'⚠️',title:'Security Incident',desc:'Following a breach or attack that may have exposed the private key.'},
+            {icon:'📋',title:'Policy Violation',desc:'Certificate was used in violation of the CA\'s certificate policy.'},
+          ].map(r=>(
+            <div key={r.title} style={{display:'flex',gap:'10px',alignItems:'flex-start',padding:'10px',background:'rgba(255,255,255,0.02)',borderRadius:'8px'}}>
+              <div style={{fontSize:'20px',flexShrink:0}}>{r.icon}</div>
+              <div>
+                <div style={{fontSize:'12px',fontWeight:'600',color:'var(--text-primary)',marginBottom:'3px'}}>{r.title}</div>
+                <div style={{fontSize:'11px',color:'var(--text-dim)',lineHeight:'1.5'}}>{r.desc}</div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Status + revoke */}
+      <div className="grid-2" style={{marginBottom:'24px'}}>
+        <div className="card">
+          <div style={{fontSize:'14px',fontWeight:'600',marginBottom:'16px'}}>🎯 Certificate Under Review</div>
+          <div style={{padding:'16px',background:revocationStatus==='revoked'?'rgba(255,61,113,0.06)':'rgba(0,230,118,0.06)',border:`1px solid ${revocationStatus==='revoked'?'rgba(255,61,113,0.25)':'rgba(0,230,118,0.25)'}`,borderRadius:'10px',textAlign:'center',marginBottom:'16px'}}>
+            <div style={{fontSize:'18px',fontWeight:'800',color:revocationStatus==='revoked'?'var(--error)':'var(--success)'}}>
+              {revocationStatus==='revoked'?'🚫 REVOKED':'✅ VALID'}
+            </div>
+            <div style={{fontSize:'12px',color:'var(--text-dim)',marginTop:'4px'}}>secure-demo.example</div>
+          </div>
+
+          {revocationStatus!=='revoked' && (
+            <>
+              <div className="form-group">
+                <label className="form-label">REVOCATION REASON</label>
+                <select className="form-select" value={reason} onChange={e=>setReason(e.target.value)}>
+                  {Object.entries(reasons).map(([k,v])=><option key={k} value={k}>{v}</option>)}
+                </select>
+              </div>
+              <button className="btn-danger" onClick={()=>setModal(true)}>🚫 Revoke Certificate</button>
+            </>
+          )}
+
+          {revocationStatus==='revoked' && (
+            <>
+              <div className="info-panel" style={{borderLeftColor:'var(--error)',marginBottom:'12px'}}>
+                <strong style={{color:'var(--error)'}}>Certificate Revoked</strong><br/>
+                This certificate is now on the CRL and will fail all validation checks. Systems checking OCSP or downloading the CRL will be notified.
+              </div>
+              <button className="btn-secondary btn-sm" onClick={()=>onNavigate('validation')}>Test Validation (will fail) →</button>
+            </>
+          )}
+        </div>
+
+        {/* Flow */}
+        <div className="card">
+          <div style={{fontSize:'14px',fontWeight:'600',marginBottom:'16px',color:'var(--accent)'}}>📋 Revocation Process</div>
+          <div style={{display:'flex',flexDirection:'column',alignItems:'center',gap:'0'}}>
+            {revokeSteps.map((s,i)=>(
+              <React.Fragment key={i}>
+                <div style={{display:'flex',alignItems:'center',gap:'12px',width:'100%',padding:'10px 0'}}>
+                  <div style={{width:'32px',height:'32px',borderRadius:'50%',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0,background:s.state==='done'?'rgba(0,230,118,0.15)':s.state==='active'?'rgba(0,180,255,0.1)':'rgba(255,255,255,0.04)',border:`1px solid ${s.state==='done'?'rgba(0,230,118,0.4)':s.state==='active'?'rgba(0,180,255,0.4)':'var(--border)'}`,fontSize:'14px'}}>
+                    {s.state==='done'?'✓':s.icon}
+                  </div>
+                  <div>
+                    <div style={{fontSize:'13px',fontWeight:'600',color:s.state==='done'?'var(--success)':s.state==='active'?'var(--accent)':'var(--text-dim)'}}>{s.label}</div>
+                    <div style={{fontSize:'11px',color:'var(--text-dim)'}}>{s.desc}</div>
+                  </div>
+                </div>
+                {i<revokeSteps.length-1 && <div style={{width:'2px',height:'16px',background:'var(--border)',marginLeft:'15px'}} />}
+              </React.Fragment>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {modal && (
+        <Modal
+          title="⚠️ Confirm Certificate Revocation"
+          onClose={()=>setModal(false)}
+          actions={
+            <>
+              <button className="btn-secondary btn-sm" onClick={()=>setModal(false)}>Cancel</button>
+              <button className="btn-danger btn-sm" onClick={handleRevoke}>Yes, Revoke Certificate</button>
+            </>
+          }
+        >
+          <p>You are about to revoke the certificate for <strong style={{color:'var(--accent)'}}>secure-demo.example</strong>.</p>
+          <p style={{marginTop:'8px'}}>Reason: <strong style={{color:'var(--warn)'}}>{reasons[reason]}</strong></p>
+          <p style={{marginTop:'8px',color:'var(--error)'}}>This action will immediately add the certificate to the CRL and cannot be undone.</p>
+        </Modal>
+      )}
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PAGE: Security Lab
+// ─────────────────────────────────────────────────────────────────────────────
+function SecurityLabPage({ onComplete }) {
+  const [activeScenario, setActiveScenario] = useState(null);
+  const [running, setRunning] = useState(false);
+  const [result, setResult] = useState(null);
+
+  const scenarios = [
+    {
+      id:'expired',icon:'⏰',title:'Expired Certificate',color:'var(--warn)',
+      problem:'An attacker uses a certificate that has passed its validity end date.',
+      attack:'Attacker attempts to present an expired certificate to gain access.',
+      checks:['Certificate format: PASS ✓','Issuer verification: PASS ✓','Expiration check: FAIL ✗ — Certificate expired 01 Jan 2025'],
+      success:false,
+      protection:'PKI requires strict validity dates. Systems automatically reject expired certificates, forcing renewal and reducing the risk of long-term compromise.',
+    },
+    {
+      id:'untrustedCA',icon:'🏴‍☠️',title:'Untrusted Certificate Authority',color:'var(--error)',
+      problem:'An attacker creates their own CA and issues certificates for legitimate domains.',
+      attack:'Attacker\'s CA issues a certificate for "bank.example" and performs MITM attacks.',
+      checks:['Certificate format: PASS ✓','Issuer verification: FAIL ✗ — "Hacker CA Corp" not in trusted store'],
+      success:false,
+      protection:'Only pre-approved CAs from trusted root programs (like browser CA stores) are trusted. Attacker-created CAs are not recognized, so their certificates are rejected.',
+    },
+    {
+      id:'invalidSig',icon:'✍️',title:'Invalid Digital Signature',color:'var(--error)',
+      problem:'An attacker modifies a certificate\'s data after it was signed by the CA.',
+      attack:'Attacker changes the CN or public key in a certificate to substitute a fraudulent key.',
+      checks:['Certificate format: PASS ✓','Issuer trusted: PASS ✓','Expiry check: PASS ✓','Signature verification: FAIL ✗ — Tampered data detected'],
+      success:false,
+      protection:'The CA\'s digital signature covers all certificate data. Any modification causes the cryptographic signature verification to fail, detecting tampering immediately.',
+    },
+    {
+      id:'domainMismatch',icon:'🎭',title:'Domain Mismatch',color:'var(--warn)',
+      problem:'An attacker presents a valid certificate issued for a different domain.',
+      attack:'Attacker intercepts traffic to "bank.example" and presents a certificate for "evil.com".',
+      checks:['Certificate format: PASS ✓','Issuer trusted: PASS ✓','Expiry check: PASS ✓','Signature valid: PASS ✓','Domain check: FAIL ✗ — CN=evil.com does not match bank.example'],
+      success:false,
+      protection:'Domain/identity verification ensures that even a valid, CA-signed certificate cannot be used for a domain other than the one it was issued for.',
+    },
+    {
+      id:'revoked',icon:'🚫',title:'Revoked Certificate',color:'var(--warn)',
+      problem:'A certificate was revoked due to key compromise but continues to be used.',
+      attack:'Attacker steals private key and attempts to use the associated certificate.',
+      checks:['All standard checks: PASS ✓','CRL / OCSP check: FAIL ✗ — Certificate is on the CRL (revoked)'],
+      success:false,
+      protection:'Certificate Revocation Lists (CRL) and OCSP allow CAs to invalidate certificates before expiry. Systems check revocation status before trusting certificates.',
+    },
+    {
+      id:'keyCompromise',icon:'🔓',title:'Compromised Private Key',color:'var(--error)',
+      problem:'An attacker obtains a server\'s private key and can impersonate the server.',
+      attack:'Attacker decrypts captured traffic and impersonates the server using the stolen key.',
+      checks:['Attacker can now: Decrypt all TLS sessions encrypted to the server','Sign data as the server','Perform MITM attacks on users trusting this certificate'],
+      success:true,
+      protection:'This is why key protection is critical. Immediate revocation limits damage. Perfect Forward Secrecy (PFS) protects past sessions. Short validity periods reduce exposure window.',
+    },
+  ];
+
+  const runScenario = async (s) => {
+    setActiveScenario(s);
+    setRunning(true);
+    setResult(null);
+    await sleep(1500);
+    setRunning(false);
+    setResult(s);
+    onComplete();
+  };
+
+  return (
+    <div className="fade-in">
+      <div className="page-header">
+        <div className="page-eyebrow">STAGE 11 • SECURITY LAB</div>
+        <div className="page-title">PKI Security Lab</div>
+        <div className="page-subtitle">Explore controlled simulations of common PKI attack scenarios. Understand how PKI defends against each threat.</div>
+      </div>
+
+      <div style={{padding:'12px 16px',background:'rgba(255,170,0,0.06)',border:'1px solid rgba(255,170,0,0.2)',borderRadius:'8px',marginBottom:'24px',fontSize:'13px',color:'var(--warn)'}}>
+        ⚠️ All scenarios are simulated for educational purposes only. No actual attacks are performed.
+      </div>
+
+      <div className="grid-2" style={{marginBottom:'24px'}}>
+        {/* Scenario list */}
+        <div>
+          <div style={{fontSize:'13px',fontWeight:'600',color:'var(--accent)',marginBottom:'12px'}}>Select a Scenario</div>
+          {scenarios.map(s=>(
+            <div key={s.id} className={`scenario-card ${activeScenario?.id===s.id?'active':''}`} style={{marginBottom:'8px'}} onClick={()=>runScenario(s)}>
+              <div className="scenario-number">SCENARIO</div>
+              <div className="scenario-title"><span style={{color:s.color,marginRight:'8px'}}>{s.icon}</span>{s.title}</div>
+              <div style={{fontSize:'12px',color:'var(--text-dim)'}}>{s.problem}</div>
+            </div>
+          ))}
+        </div>
+
+        {/* Scenario detail */}
+        <div>
+          {running && (
+            <div className="card" style={{textAlign:'center',padding:'40px'}}>
+              <div style={{fontSize:'32px',marginBottom:'12px',animation:'spin 1s linear infinite',display:'inline-block'}}>⟳</div>
+              <div style={{fontSize:'14px',color:'var(--accent)'}}>Simulating attack scenario...</div>
+            </div>
+          )}
+
+          {result && !running && (
+            <div className="card fade-in">
+              <div style={{display:'flex',gap:'10px',alignItems:'center',marginBottom:'16px'}}>
+                <span style={{fontSize:'28px'}}>{result.icon}</span>
+                <div>
+                  <div style={{fontSize:'16px',fontWeight:'700',color:result.color}}>{result.title}</div>
+                  <span className={`badge ${result.success?'badge-error':'badge-success'}`}>
+                    {result.success?'ATTACK SUCCEEDS':'ATTACK BLOCKED'}
+                  </span>
+                </div>
+              </div>
+
+              <div style={{marginBottom:'14px'}}>
+                <div style={{fontSize:'12px',fontWeight:'600',color:'var(--warn)',marginBottom:'6px',textTransform:'uppercase',letterSpacing:'0.5px'}}>⚔️ Attack</div>
+                <div style={{fontSize:'13px',color:'var(--text-secondary)',lineHeight:'1.6'}}>{result.attack}</div>
+              </div>
+
+              <div style={{marginBottom:'14px'}}>
+                <div style={{fontSize:'12px',fontWeight:'600',color:'var(--accent)',marginBottom:'8px',textTransform:'uppercase',letterSpacing:'0.5px'}}>🔍 PKI Checks</div>
+                {result.checks.map((c,i)=>(
+                  <div key={i} style={{display:'flex',gap:'8px',alignItems:'flex-start',padding:'4px 0',fontSize:'12px',color:c.includes('FAIL')?'var(--error)':c.includes('PASS')?'var(--success)':'var(--warn)'}}>
+                    <span style={{flexShrink:0}}>{c.includes('FAIL')?'✕':c.includes('PASS')?'✓':'⚠️'}</span>
+                    <span>{c}</span>
+                  </div>
+                ))}
+              </div>
+
+              <div style={{padding:'12px 14px',background:result.success?'rgba(255,61,113,0.06)':'rgba(0,230,118,0.06)',border:`1px solid ${result.success?'rgba(255,61,113,0.2)':'rgba(0,230,118,0.2)'}`,borderRadius:'8px'}}>
+                <div style={{fontSize:'12px',fontWeight:'600',color:result.success?'var(--error)':'var(--success)',marginBottom:'6px'}}>
+                  {result.success?'❌ Why this attack succeeded':'✅ How PKI blocked this'}
+                </div>
+                <div style={{fontSize:'12px',color:'var(--text-secondary)',lineHeight:'1.6'}}>{result.protection}</div>
+              </div>
+            </div>
+          )}
+
+          {!result && !running && (
+            <div style={{padding:'40px',textAlign:'center',color:'var(--text-dim)',fontSize:'13px',background:'rgba(255,255,255,0.02)',border:'1px dashed var(--border)',borderRadius:'8px'}}>
+              Select a scenario to simulate
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PAGE: PKI Journey
+// ─────────────────────────────────────────────────────────────────────────────
+function JourneyPage({ progress, onNavigate, onComplete }) {
+  const steps = [
+    {id:'keygen',num:1,title:'Generate Cryptographic Keys',desc:'Create an RSA key pair — public and private. Foundation of PKI identity.',page:'keygen'},
+    {id:'csr',num:2,title:'Create Certificate Signing Request',desc:'Bundle your identity info and public key into a CSR for submission to the CA.',page:'csr'},
+    {id:'ca',num:3,title:'Submit to Certificate Authority',desc:'Send your CSR to the trusted CA that will verify your identity.',page:'ca'},
+    {id:'ca',num:4,title:'CA Verifies Request',desc:'The CA checks your identity, validates the CSR, and decides to issue or reject.',page:'ca'},
+    {id:'certificate',num:5,title:'Certificate Issued',desc:'The CA signs your certificate. It is now a trusted identity credential.',page:'certificate'},
+    {id:'certificate',num:6,title:'Certificate Installed',desc:'The certificate is deployed and ready for use in servers and applications.',page:'certificate'},
+    {id:'validation',num:7,title:'Certificate Validated',desc:'Clients validate the certificate before trusting the server\'s identity.',page:'validation'},
+    {id:'auth',num:8,title:'Identity Authenticated',desc:'Using PKI, the client proves its identity through challenge-response.',page:'auth'},
+    {id:'communication',num:9,title:'Secure Communication',desc:'PKI enables encrypted, authenticated data exchange between parties.',page:'communication'},
+    {id:'revocation',num:10,title:'Certificate Renewal / Revocation',desc:'Manage certificate lifecycle — renew before expiry, revoke if compromised.',page:'revocation'},
+  ];
+
+  useEffect(() => { onComplete(); }, []);
+
+  return (
+    <div className="fade-in">
+      <div className="page-header">
+        <div className="page-eyebrow">COMPLETE FLOW</div>
+        <div className="page-title">PKI Journey</div>
+        <div className="page-subtitle">The complete end-to-end Public Key Infrastructure workflow from identity to secure communication.</div>
+      </div>
+
+      <div style={{position:'relative'}}>
+        {steps.map((s,i)=>{
+          const done = progress[s.id];
+          const isLast = i===steps.length-1;
+          return (
+            <div key={i} className="journey-item" onClick={()=>onNavigate(s.page)}>
+              {!isLast && <div className={`journey-line ${done?'done':''}`} />}
+              <div className={`journey-step-num ${done?'done':s.id===Object.keys(progress).find(k=>!progress[k])?'active':'pending'}`}>
+                {done ? '✓' : s.num}
+              </div>
+              <div className="journey-content">
+                <div className="journey-title">{s.title}</div>
+                <div className="journey-desc">{s.desc}</div>
+                <div className="journey-badge">
+                  {done ? <span className="badge badge-success">✓ Completed</span> : <span className="badge badge-info">Click to navigate</span>}
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {Object.values(progress).filter(Boolean).length === Object.keys(progress).length && (
+        <div className="card fade-in" style={{marginTop:'24px',background:'rgba(0,230,118,0.04)',borderColor:'rgba(0,230,118,0.3)',textAlign:'center',padding:'28px'}}>
+          <div style={{fontSize:'40px',marginBottom:'8px'}}>🎉</div>
+          <div style={{fontSize:'20px',fontWeight:'700',color:'var(--success)',marginBottom:'8px'}}>PKI Journey Complete!</div>
+          <div style={{fontSize:'13px',color:'var(--text-dim)',marginBottom:'16px'}}>You have successfully completed all stages of the PKI simulation.</div>
+          <button className="btn-primary" onClick={()=>onNavigate('completion')}>View Completion Certificate →</button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PAGE: Completion
+// ─────────────────────────────────────────────────────────────────────────────
+function CompletionPage({ progress, keyPair, certificate, onReset, onNavigate }) {
+  const achievements = [
+    {done:progress.keygen, text:'Generated cryptographic key pair'},
+    {done:progress.csr, text:'Created Certificate Signing Request'},
+    {done:progress.ca, text:'Interacted with Certificate Authority'},
+    {done:progress.certificate, text:'Issued digital certificate'},
+    {done:progress.validation, text:'Validated certificate using PKI checks'},
+    {done:progress.auth, text:'Verified identity through authentication'},
+    {done:progress.communication, text:'Established secure encrypted communication'},
+    {done:progress.securityLab, text:'Tested certificate failure scenarios'},
+    {done:progress.revocation, text:'Simulated certificate revocation'},
+  ];
+
+  return (
+    <div className="fade-in" style={{maxWidth:'700px',margin:'0 auto',textAlign:'center',padding:'20px 0'}}>
+      <span className="completion-star">🏆</span>
+      <div style={{fontSize:'32px',fontWeight:'800',color:'var(--success)',marginBottom:'6px',marginTop:'16px'}}>PKI SIMULATION COMPLETE ✓</div>
+      <div style={{fontSize:'16px',color:'var(--accent)',marginBottom:'6px'}}>Trust Infrastructure Successfully Simulated</div>
+      <div style={{fontSize:'13px',color:'var(--text-dim)',marginBottom:'32px',lineHeight:'1.7',maxWidth:'500px',margin:'0 auto 32px'}}>
+        PKI establishes digital trust by connecting identities, cryptographic keys, certificates, and trusted authorities into a complete security ecosystem.
+      </div>
+
+      <div style={{textAlign:'left',marginBottom:'28px'}}>
+        {achievements.map((a,i)=>(
+          <div key={i} className="achievement-item" style={{animationDelay:`${i*0.08}s`}}>
+            <span className="achievement-icon">{a.done?'✅':'⬜'}</span>
+            <span className="achievement-text" style={{color:a.done?'var(--text-primary)':'var(--text-dim)'}}>{a.text}</span>
+          </div>
+        ))}
+      </div>
+
+      {/* Summary */}
+      <div className="card" style={{textAlign:'left',marginBottom:'24px'}}>
+        <div style={{fontSize:'14px',fontWeight:'600',color:'var(--accent)',marginBottom:'14px'}}>🔐 Concepts Mastered</div>
+        <div className="grid-2">
+          {['Public & Private Key Cryptography','Certificate Signing Requests (CSR)','Certificate Authority Operations','Digital Certificate Structure','Certificate Validation Process','Challenge-Response Authentication','TLS/Secure Communication Model','Certificate Revocation (CRL/OCSP)'].map(c=>(
+            <div key={c} style={{display:'flex',gap:'8px',alignItems:'center',fontSize:'12px',color:'var(--text-secondary)'}}>
+              <span style={{color:'var(--success)'}}>✓</span>{c}
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div style={{display:'flex',gap:'12px',justifyContent:'center',flexWrap:'wrap'}}>
+        <button className="btn-primary" onClick={onReset}>↺ Restart Simulation</button>
+        <button className="btn-secondary" onClick={()=>onNavigate('journey')}>🗺️ Explore PKI Again</button>
+        <button className="btn-secondary" onClick={()=>onNavigate('dashboard')}>📊 Dashboard</button>
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// DEMO MODE
+// ─────────────────────────────────────────────────────────────────────────────
+async function runDemo(navigate, setData, sleep2) {
+  const userInfo = { name:'Demo User', org:'PKI Academy', domain:'demo.example', email:'demo@pki.example' };
+  const pub = genPublicKey();
+  const priv = genPrivateKey();
+  const keyPair = { publicKey:pub, privateKey:priv };
+  const csr = {
+    commonName:'demo.example', org:'PKI Academy', country:'IN',
+    email:'demo@pki.example', domain:'demo.example',
+    publicKeyFingerprint:genFingerprint(), timestamp:new Date().toISOString(),
+    signature:randomHex(64).toUpperCase(),
+  };
+  const cert = {
+    cn:'demo.example', org:'PKI Academy', country:'IN', email:'demo@pki.example',
+    issuer:'PKI Learning Root CA', serial:genSerial(), validFrom:now(),
+    validTo:addYear(now(),1), fingerprint:genFingerprint(),
+    sigAlg:'SHA256withRSA', version:'V3',
+    keyUsage:'Digital Signature, Key Encipherment',
+    extKeyUsage:'TLS Web Server Authentication', status:'valid',
+  };
+
+  const steps = [
+    ()=>{ navigate('keygen'); setData(p=>({...p, userInfo, keyPair, progress:{...p.progress,keygen:true}})); },
+    ()=>{ navigate('csr'); setData(p=>({...p, csr, progress:{...p.progress,csr:true}})); },
+    ()=>{ navigate('ca'); setData(p=>({...p, progress:{...p.progress,ca:true}})); },
+    ()=>{ navigate('certificate'); setData(p=>({...p, certificate:cert, progress:{...p.progress,certificate:true}})); },
+    ()=>{ navigate('validation'); setData(p=>({...p, progress:{...p.progress,validation:true}})); },
+    ()=>{ navigate('auth'); setData(p=>({...p, progress:{...p.progress,auth:true}})); },
+    ()=>{ navigate('communication'); setData(p=>({...p, progress:{...p.progress,communication:true}})); },
+    ()=>{ navigate('completion'); },
+  ];
+
+  for (const fn of steps) {
+    fn();
+    await sleep2(2000);
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ROOT APP
+// ─────────────────────────────────────────────────────────────────────────────
+function App() {
+  const [appState, setAppState] = useState(initState());
+  const [showLoading, setShowLoading] = useState(true);
+  const [pageLoading, setPageLoading] = useState(false);
+
+  const navigate = useCallback(async (page) => {
+    if (page === appState.currentPage) return;
+    setPageLoading(true);
+    await sleep(200);
+    setAppState(p=>({...p, currentPage:page}));
+    setPageLoading(false);
+  }, [appState.currentPage]);
+
+  const markComplete = (key) => setAppState(p=>({...p, progress:{...p.progress,[key]:true}}));
+
+  const handleReset = () => {
+    setAppState(initState());
+    setShowLoading(true);
+  };
+
+  const trustStatus = appState.progress.certificate && appState.progress.validation ? 'established' : 'establishing';
+
+  if (showLoading) {
+    return <LoadingScreen onDone={()=>setShowLoading(false)} />;
+  }
+
+  if (appState.currentPage === 'landing') {
+    return (
+      <div style={{position:'relative'}}>
+        <div className="grid-bg" />
+        <LandingPage
+          onStart={()=>navigate('dashboard')}
+          onExplore={()=>navigate('overview')}
+          onDemo={async ()=>{
+            await navigate('dashboard');
+            runDemo(
+              (p)=>setAppState(s=>({...s,currentPage:p})),
+              setAppState,
+              sleep
+            );
+          }}
+        />
+      </div>
+    );
+  }
+
+  if (appState.currentPage === 'completion') {
+    return (
+      <div className="app-layout">
+        <div className="grid-bg" />
+        <Sidebar
+          currentPage={appState.currentPage}
+          progress={appState.progress}
+          collapsed={appState.sidebarCollapsed}
+          onNavigate={navigate}
+          onToggle={()=>setAppState(p=>({...p,sidebarCollapsed:!p.sidebarCollapsed}))}
+        />
+        <div className="main-area">
+          <Topbar currentPage={appState.currentPage} trustStatus={trustStatus} notifications={appState.notifications} onNavigate={navigate} onReset={handleReset} />
+          <div className="page-content">
+            <CompletionPage
+              progress={appState.progress}
+              keyPair={appState.keyPair}
+              certificate={appState.certificate}
+              onReset={handleReset}
+              onNavigate={navigate}
+            />
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  const renderPage = () => {
+    if (pageLoading) {
+      return (
+        <div style={{display:'flex',alignItems:'center',justifyContent:'center',height:'200px',gap:'12px'}}>
+          <div style={{width:'24px',height:'24px',border:'2px solid rgba(0,180,255,0.3)',borderTopColor:'var(--accent)',borderRadius:'50%',animation:'spin 0.8s linear infinite'}} />
+          <span style={{color:'var(--text-dim)',fontSize:'13px'}}>Loading...</span>
+        </div>
+      );
+    }
+    switch (appState.currentPage) {
+      case 'dashboard':
+        return <DashboardPage progress={appState.progress} certificate={appState.certificate} keyPair={appState.keyPair} onNavigate={navigate} />;
+      case 'overview':
+        return <OverviewPage onComplete={()=>markComplete('overview')} onNavigate={navigate} />;
+      case 'keygen':
+        return <KeygenPage keyPair={appState.keyPair} userInfo={appState.userInfo} onGenerate={(kp,ui)=>setAppState(p=>({...p,keyPair:kp,userInfo:ui}))} onComplete={()=>markComplete('keygen')} onNavigate={navigate} />;
+      case 'csr':
+        return <CSRPage keyPair={appState.keyPair} userInfo={appState.userInfo} csr={appState.csr} onGenerate={(c)=>setAppState(p=>({...p,csr:c}))} onSubmit={()=>{}} onComplete={()=>markComplete('csr')} onNavigate={navigate} />;
+      case 'ca':
+        return <CAPage csr={appState.csr} onIssue={(c)=>setAppState(p=>({...p,certificate:c}))} onComplete={()=>markComplete('ca')} onNavigate={navigate} />;
+      case 'certificate':
+        return <CertificatePage certificate={appState.certificate} onComplete={()=>markComplete('certificate')} onNavigate={navigate} />;
+      case 'validation':
+        return <ValidationPage certificate={appState.certificate} onComplete={()=>markComplete('validation')} onNavigate={navigate} />;
+      case 'auth':
+        return <AuthPage certificate={appState.certificate} onComplete={()=>markComplete('auth')} onNavigate={navigate} />;
+      case 'communication':
+        return <CommunicationPage certificate={appState.certificate} onComplete={()=>markComplete('communication')} onNavigate={navigate} />;
+      case 'management':
+        return <ManagementPage
+          certificates={appState.certificates}
+          onRevoke={(id)=>setAppState(p=>({...p,certificates:p.certificates.map(c=>c.id===id?{...c,status:'revoked'}:c)}))}
+          onComplete={()=>markComplete('management')}
+          onNavigate={navigate}
+        />;
+      case 'revocation':
+        return <RevocationPage revocationStatus={appState.revocationStatus} onRevoke={()=>setAppState(p=>({...p,revocationStatus:'revoked'}))} onComplete={()=>markComplete('revocation')} onNavigate={navigate} />;
+      case 'securityLab':
+        return <SecurityLabPage onComplete={()=>markComplete('securityLab')} />;
+      case 'journey':
+        return <JourneyPage progress={appState.progress} onNavigate={navigate} onComplete={()=>markComplete('journey')} />;
+      default:
+        return <DashboardPage progress={appState.progress} certificate={appState.certificate} keyPair={appState.keyPair} onNavigate={navigate} />;
+    }
+  };
+
+  return (
+    <div className="app-layout">
+      <div className="grid-bg" />
+      <Sidebar
+        currentPage={appState.currentPage}
+        progress={appState.progress}
+        collapsed={appState.sidebarCollapsed}
+        onNavigate={navigate}
+        onToggle={()=>setAppState(p=>({...p,sidebarCollapsed:!p.sidebarCollapsed}))}
+      />
+      <div className="main-area">
+        <Topbar currentPage={appState.currentPage} trustStatus={trustStatus} notifications={appState.notifications} onNavigate={navigate} onReset={handleReset} />
+        <div className="page-content">
+          {renderPage()}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+</script>
+</body>
+</html>
